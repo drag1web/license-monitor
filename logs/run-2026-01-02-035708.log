@@ -1,0 +1,4 @@
+[2026-01-02T11:57:08.607Z] INFO: Start license monitoring run
+[2026-01-02T11:57:08.608Z] INFO: Config: {"installationsPath":"data/installations.csv","licensesPath":"data/licenses.csv","mappingPath":"data/mapping.csv","reportPath":"data/report.csv","unmatchedPath":"data/unmatched.csv","xlsxReportPath":"data/report.xlsx","badRowsPath":"data/bad_rows.csv","dbPath":"data/history.db","runsCsvPath":"data/runs.csv","expiresDays":30}
+[2026-01-02T11:57:08.677Z] INFO: Saved run to DB: run_id=2
+[2026-01-02T11:57:08.678Z] INFO: Finish license monitoring run

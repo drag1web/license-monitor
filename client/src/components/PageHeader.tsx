@@ -1,0 +1,333 @@
+import React from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Card } from "../ui/Card";
+import { cn } from "../ui/cn/cn";
+import {
+  ChevronRight,
+  Home,
+  History,
+  Settings as SettingsIcon,
+  ArrowUpRight,
+  Command,
+  KeyRound,
+} from "lucide-react";
+
+/**
+ * ==========================================
+ * PageHeader — "premium shell"
+ * ==========================================
+ * Features:
+ * - Top tabs (Dashboard / Runs / Licenses / Settings)
+ * - Breadcrumbs from pathname (humanized)
+ * - Active route highlight with glow
+ * - Right slot (actions)
+ * - Optional hotkey: Ctrl+, (Cmd+, on mac) -> Settings
+ * - Safe for Electron + tests/SSR (guards for window/navigator)
+ */
+
+type Tab = {
+  to: string;
+  label: string;
+  icon: React.ReactNode;
+  match: (path: string) => boolean;
+};
+
+const TABS: Tab[] = [
+  {
+    to: "/",
+    label: "Dashboard",
+    icon: <Home className="h-4 w-4" />,
+    match: (p) => p === "/" || p.startsWith("/dashboard"),
+  },
+  {
+    to: "/runs",
+    label: "Runs",
+    icon: <History className="h-4 w-4" />,
+    match: (p) => p.startsWith("/runs"),
+  },
+  {
+    to: "/licenses",
+    label: "Licenses",
+    icon: <KeyRound className="h-4 w-4" />,
+    match: (p) => p.startsWith("/licenses"),
+  },
+  {
+    to: "/settings",
+    label: "Settings",
+    icon: <SettingsIcon className="h-4 w-4" />,
+    match: (p) => p.startsWith("/settings"),
+  },
+];
+
+const BREAD_MAP: Record<string, string> = {
+  runs: "Runs",
+  diff: "Diff",
+  settings: "Settings",
+  licenses: "Licenses",
+  login: "Login",
+};
+
+function humanizeSegment(seg: string) {
+  if (/^\d+$/.test(seg)) return `#${seg}`;
+  return BREAD_MAP[seg] ?? seg.replace(/[-_]/g, " ");
+}
+
+function isActiveTab(pathname: string, tab: Tab) {
+  return tab.match(pathname);
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+
+  const tag = el.tagName?.toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  if (el.isContentEditable) return true;
+
+  const closest = el.closest?.(
+    'input, textarea, select, [contenteditable="true"]'
+  );
+  return Boolean(closest);
+}
+
+function getIsMac() {
+  if (typeof navigator === "undefined") return false;
+  const p = navigator.platform?.toLowerCase?.() ?? "";
+  const ua = navigator.userAgent?.toLowerCase?.() ?? "";
+  return p.includes("mac") || ua.includes("mac os");
+}
+
+function SoftPillLink({
+  to,
+  active,
+  icon,
+  label,
+}: {
+  to: string;
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <Link
+      to={to}
+      className={cn(
+        "relative inline-flex items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-semibold",
+        "transition outline-none",
+        "focus-visible:ring-2 focus-visible:ring-cyan-300/25",
+        active
+          ? cn(
+              "text-white/90",
+              "border border-white/[0.14]",
+              "bg-gradient-to-b from-white/[0.10] to-white/[0.04]",
+              "shadow-[0_18px_70px_rgba(34,211,238,0.10)]"
+            )
+          : cn(
+              "text-white/70",
+              "border border-white/[0.08]",
+              "bg-white/[0.02]",
+              "hover:bg-white/[0.05] hover:text-white/85 hover:border-white/[0.12]",
+              "shadow-[0_14px_50px_rgba(0,0,0,0.35)]"
+            )
+      )}
+    >
+      <span className={cn("text-white/60", active && "text-cyan-200/90")}>
+        {icon}
+      </span>
+      <span className="leading-none">{label}</span>
+
+      {active && (
+        <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(120px_60px_at_50%_0%,rgba(255,255,255,0.35),transparent_70%)]" />
+      )}
+    </Link>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-lg px-2 py-1",
+        "border border-white/[0.10] bg-white/[0.03]",
+        "text-[11px] font-semibold text-white/55"
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+export function PageHeader({
+  title,
+  right,
+  subtitle,
+  showTabs = true,
+  showBreadcrumbs = true,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  showTabs?: boolean;
+  showBreadcrumbs?: boolean;
+}) {
+  const { pathname } = useLocation();
+  const nav = useNavigate();
+  const isMac = React.useMemo(() => getIsMac(), []);
+
+  const parts = React.useMemo(() => {
+    const raw = pathname.split("/").filter(Boolean);
+    return raw.map((p, i) => ({
+      raw: p,
+      label: humanizeSegment(p),
+      href:
+        "/" +
+        raw
+          .slice(0, i + 1)
+          .map((x) => x)
+          .join("/"),
+    }));
+  }, [pathname]);
+
+  // Hotkey: Ctrl+, (Cmd+, on mac) -> /settings
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (isTypingTarget(e.target)) return;
+
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (mod && e.key === ",") {
+        e.preventDefault();
+        nav("/settings");
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [nav, isMac]);
+
+  return (
+    <Card
+      className={cn(
+        "relative overflow-hidden mb-4",
+        "rounded-3xl border border-white/[0.08]",
+        "bg-gradient-to-b from-slate-950/70 via-slate-950/45 to-slate-950/25",
+        "backdrop-blur-xl",
+        "shadow-[0_24px_90px_rgba(0,0,0,0.55)]"
+      )}
+    >
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/20 to-transparent" />
+      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
+      <div className="pointer-events-none absolute -right-24 -bottom-24 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
+
+      <div className="relative p-4 md:p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
+          {showTabs && (
+            <div className="flex flex-wrap items-center gap-2">
+              {TABS.map((t) => (
+                <SoftPillLink
+                  key={t.to}
+                  to={t.to}
+                  label={t.label}
+                  icon={t.icon}
+                  active={isActiveTab(pathname, t)}
+                />
+              ))}
+
+              <div className="hidden lg:flex items-center gap-2 ml-2">
+                <Kbd>
+                  <Command className="h-3.5 w-3.5" />
+                  <span>{isMac ? "Cmd" : "Ctrl"}</span>
+                  <span>+</span>
+                  <span>,</span>
+                </Kbd>
+                <span className="text-[11px] text-white/40">открыть Settings</span>
+              </div>
+            </div>
+          )}
+
+          <div className="md:ml-auto flex items-center gap-2">{right}</div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div className="min-w-0">
+            {showBreadcrumbs && (
+              <nav className="flex flex-wrap items-center gap-1 text-[12px] text-white/45">
+                <Link
+                  to="/"
+                  className="inline-flex items-center gap-1 rounded-xl px-2 py-1 hover:bg-white/[0.05] hover:text-white/70 transition"
+                >
+                  <Home className="h-3.5 w-3.5" />
+                  <span>Home</span>
+                </Link>
+
+                {parts.map((p, idx) => (
+                  <span key={p.href} className="inline-flex items-center gap-1">
+                    <ChevronRight className="h-3.5 w-3.5 text-white/25" />
+                    {idx < parts.length - 1 ? (
+                      <Link
+                        to={p.href}
+                        className="rounded-xl px-2 py-1 hover:bg-white/[0.05] hover:text-white/70 transition"
+                      >
+                        {p.label}
+                      </Link>
+                    ) : (
+                      <span className="rounded-xl px-2 py-1 text-white/70">
+                        {p.label}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </nav>
+            )}
+
+            <div className="mt-2 flex items-center gap-3 min-w-0">
+              <div className="min-w-0">
+                <div className="text-xl md:text-2xl font-semibold tracking-tight text-white/90 truncate">
+                  {title}
+                </div>
+                {subtitle && (
+                  <div className="mt-0.5 text-sm text-white/50 truncate">
+                    {subtitle}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-[12px] text-white/45">
+            <span className="hidden md:inline">Quick:</span>
+
+            <Link
+              to="/runs"
+              className={cn(
+                "inline-flex items-center gap-2 rounded-2xl px-3 py-2",
+                "border border-white/[0.08] bg-white/[0.02]",
+                "hover:bg-white/[0.06] hover:border-white/[0.12]",
+                "transition"
+              )}
+              title="Открыть Runs"
+            >
+              <ArrowUpRight className="h-4 w-4 text-white/40" />
+              <span>Open Runs</span>
+            </Link>
+
+            <Link
+              to="/licenses"
+              className={cn(
+                "inline-flex items-center gap-2 rounded-2xl px-3 py-2",
+                "border border-white/[0.08] bg-white/[0.02]",
+                "hover:bg-white/[0.06] hover:border-white/[0.12]",
+                "transition"
+              )}
+              title="Открыть Licenses"
+            >
+              <ArrowUpRight className="h-4 w-4 text-white/40" />
+              <span>Open Licenses</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}

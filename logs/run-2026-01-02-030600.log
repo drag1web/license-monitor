@@ -1,0 +1,10 @@
+[2026-01-02T11:06:00.826Z] INFO: Start license monitoring run
+[2026-01-02T11:06:00.827Z] INFO: Config: {"installationsPath":"data/installations.csv","licensesPath":"data/licenses.csv","mappingPath":"data/mapping.csv","reportPath":"data/report.csv","unmatchedPath":"data/unmatched.csv","xlsxReportPath":"data/report.xlsx","badRowsPath":"data/bad_rows.csv","expiresDays":30}
+[2026-01-02T11:06:00.833Z] INFO: Loaded installs: 3
+[2026-01-02T11:06:00.833Z] INFO: Loaded licenses: 2
+[2026-01-02T11:06:00.835Z] INFO: Valid installs: 3, bad: 0
+[2026-01-02T11:06:00.835Z] INFO: Valid licenses: 2, bad: 0
+[2026-01-02T11:06:00.837Z] INFO: Loaded mapping rules: 4
+[2026-01-02T11:06:00.839Z] INFO: Report rows: 2
+[2026-01-02T11:06:00.839Z] WARN: Unmatched installs: 0
+[2026-01-02T11:06:00.894Z] INFO: Finish license monitoring run

@@ -1,0 +1,12 @@
+{
+  "installationsPath": "data/installations.csv",
+  "licensesPath": "data/licenses.csv",
+  "mappingPath": "data/mapping.csv",
+  "reportPath": "data/report.csv",
+  "unmatchedPath": "data/unmatched.csv",
+  "xlsxReportPath": "data/report.xlsx",
+  "badRowsPath": "data/bad_rows.csv",
+  "dbPath": "data/history.db",
+  "runsCsvPath": "data/runs.csv",
+  "expiresDays": 30
+}
