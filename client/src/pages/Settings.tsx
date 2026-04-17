@@ -8,6 +8,7 @@ import {
   defaultSettings,
 } from "../settings/store";
 import { useToast } from "../ui/toast";
+import { useAuth } from "../auth/AuthContext";
 
 import {
   Settings as SettingsIcon,
@@ -21,6 +22,7 @@ import {
   SlidersHorizontal,
   Cpu,
   Eye,
+  Lock,
 } from "lucide-react";
 
 import { SectionTitle } from "../settings/components/SectionTitle";
@@ -68,20 +70,23 @@ function downloadText(filename: string, text: string) {
 export default function SettingsPage() {
   const toast = useToast();
   const { settings, setSettings, reset } = useSettings();
+  const { user, changePassword } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   const fileRef = React.useRef<HTMLInputElement | null>(null);
 
   const [importText, setImportText] = React.useState("");
   const [showAdvanced, setShowAdvanced] = React.useState(false);
 
-  const pretty = React.useMemo(
-    () => exportSettingsJson(settings),
-    [settings]
-  );
+  const [currentPassword, setCurrentPassword] = React.useState("");
+  const [newPassword, setNewPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [passwordBusy, setPasswordBusy] = React.useState(false);
 
-  // ---- helpers обновления (меньше бойлерплейта, меньше ошибок)
+  const pretty = React.useMemo(() => exportSettingsJson(settings), [settings]);
+
   const update = React.useCallback(
-    (patch: Partial<Settings>) =>
-      setSettings((s) => ({ ...s, ...patch })),
+    (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })),
     [setSettings]
   );
 
@@ -151,9 +156,70 @@ export default function SettingsPage() {
     }
   }
 
+  async function doChangePassword() {
+    if (!isAdmin) {
+      toast.push({
+        tone: "error",
+        title: "Недостаточно прав",
+        message: "Сменить пароль может только admin.",
+      });
+      return;
+    }
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.push({
+        tone: "error",
+        title: "Смена пароля",
+        message: "Заполни все поля.",
+      });
+      return;
+    }
+
+    if (newPassword.length < 4) {
+      toast.push({
+        tone: "error",
+        title: "Смена пароля",
+        message: "Новый пароль должен быть не короче 4 символов.",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.push({
+        tone: "error",
+        title: "Смена пароля",
+        message: "Новый пароль и подтверждение не совпадают.",
+      });
+      return;
+    }
+
+    setPasswordBusy(true);
+    try {
+      await changePassword(currentPassword, newPassword);
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+
+      toast.push({
+        tone: "success",
+        title: "Пароль изменен",
+        message: "Новый пароль успешно сохранен.",
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.push({
+        tone: "error",
+        title: "Смена пароля не удалась",
+        message: msg,
+      });
+    } finally {
+      setPasswordBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {/* Hero */}
       <Card
         className={cn(
           "relative overflow-hidden rounded-3xl p-5",
@@ -170,9 +236,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="text-xs text-white/50 tracking-wide">
-              Параметры
-            </div>
+            <div className="text-xs text-white/50 tracking-wide">Параметры</div>
             <div className="mt-1 text-2xl font-semibold text-white/90 tracking-tight">
               Настройки
             </div>
@@ -183,10 +247,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <SoftButton
-              onClick={doExport}
-              icon={<Download className="h-4 w-4" />}
-            >
+            <SoftButton onClick={doExport} icon={<Download className="h-4 w-4" />}>
               Экспорт
             </SoftButton>
 
@@ -235,7 +296,25 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      {/* UI */}
+      {!isAdmin && (
+        <Card className="p-4 rounded-3xl border border-white/[0.08] bg-white/[0.02]">
+          <div className="flex items-start gap-3">
+            <div className="h-10 w-10 rounded-2xl grid place-items-center bg-white/[0.03] border border-white/[0.08]">
+              <Lock className="h-5 w-5 text-white/70" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-white/85">
+                Режим ограниченного доступа
+              </div>
+              <div className="mt-1 text-xs text-white/55">
+                Настройки интерфейса доступны, но смена пароля разрешена только
+                пользователю с ролью admin.
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <Card className="p-5 rounded-3xl border border-white/[0.08] bg-white/[0.02]">
         <SectionTitle
           icon={<Palette className="h-5 w-5 text-cyan-200/80" />}
@@ -251,16 +330,15 @@ export default function SettingsPage() {
             value={settings.theme}
             onChange={(v) =>
               update({
-                theme: THEMES.includes(v as Theme)
-                  ? (v as Theme)
-                  : "graphite",
+                theme: THEMES.includes(v as Theme) ? (v as Theme) : "graphite",
               })
             }
-          >
-            <option value="graphite">Graphite (по умолчанию)</option>
-            <option value="midnight">Midnight</option>
-            <option value="snow">Snow</option>
-          </Select>
+            options={[
+              { value: "graphite", label: "Graphite (по умолчанию)" },
+              { value: "midnight", label: "Midnight" },
+              { value: "snow", label: "Snow" },
+            ]}
+          />
         </FieldRow>
 
         <FieldRow
@@ -276,10 +354,11 @@ export default function SettingsPage() {
                   : "comfortable",
               })
             }
-          >
-            <option value="comfortable">Комфортная</option>
-            <option value="compact">Компактная</option>
-          </Select>
+            options={[
+              { value: "comfortable", label: "Комфортная" },
+              { value: "compact", label: "Компактная" },
+            ]}
+          />
         </FieldRow>
 
         <FieldRow
@@ -294,7 +373,6 @@ export default function SettingsPage() {
         </FieldRow>
       </Card>
 
-      {/* Performance */}
       <Card className="p-5 rounded-3xl border border-white/[0.08] bg-white/[0.02]">
         <SectionTitle
           icon={<Cpu className="h-5 w-5 text-cyan-200/80" />}
@@ -322,7 +400,6 @@ export default function SettingsPage() {
           <Toggle
             checked={settings.perf.disableBackdropBlur}
             onChange={(v) => updatePerf({ disableBackdropBlur: v })}
-            // тут логика в исходнике инвертирована — сохраняю её как есть
             label={settings.perf.disableBackdropBlur ? "Выключено" : "Включено"}
           />
         </FieldRow>
@@ -350,7 +427,6 @@ export default function SettingsPage() {
         </FieldRow>
       </Card>
 
-      {/* Behavior */}
       <Card className="p-5 rounded-3xl border border-white/[0.08] bg-white/[0.02]">
         <SectionTitle
           icon={<SlidersHorizontal className="h-5 w-5 text-cyan-200/80" />}
@@ -368,11 +444,12 @@ export default function SettingsPage() {
                   : "/",
               })
             }
-          >
-            <option value="/">Главная страница</option>
-            <option value="/runs">Запуски</option>
-            <option value="/licenses">Лицензии</option>
-          </Select>
+            options={[
+              { value: "/", label: "Главная страница" },
+              { value: "/runs", label: "Запуски" },
+              { value: "/licenses", label: "Лицензии" },
+            ]}
+          />
         </FieldRow>
 
         <FieldRow
@@ -385,21 +462,20 @@ export default function SettingsPage() {
               const n = Number(v);
               update({ autoRefreshSec: Number.isFinite(n) ? n : 0 });
             }}
-          >
-            {AUTO_REFRESH.map((n) => (
-              <option key={n} value={String(n)}>
-                {n === 0
+            options={AUTO_REFRESH.map((n) => ({
+              value: String(n),
+              label:
+                n === 0
                   ? "Выключено"
                   : n < 60
-                  ? `Каждые ${n} сек`
-                  : n === 60
-                  ? "Каждые 60 сек"
-                  : n === 120
-                  ? "Каждые 120 сек"
-                  : "Каждые 5 минут"}
-              </option>
-            ))}
-          </Select>
+                    ? `Каждые ${n} сек`
+                    : n === 60
+                      ? "Каждые 60 сек"
+                      : n === 120
+                        ? "Каждые 120 сек"
+                        : "Каждые 5 минут",
+            }))}
+          />
         </FieldRow>
 
         <FieldRow
@@ -436,7 +512,6 @@ export default function SettingsPage() {
         </FieldRow>
       </Card>
 
-      {/* Tables */}
       <Card className="p-5 rounded-3xl border border-white/[0.08] bg-white/[0.02]">
         <SectionTitle
           icon={<Table2 className="h-5 w-5 text-cyan-200/80" />}
@@ -454,13 +529,11 @@ export default function SettingsPage() {
               const n = Number(v) as RunsLimit;
               updateData({ runsLimit: RUNS_LIMITS.includes(n) ? n : 200 });
             }}
-          >
-            {RUNS_LIMITS.map((n) => (
-              <option key={n} value={String(n)}>
-                {n}
-              </option>
-            ))}
-          </Select>
+            options={RUNS_LIMITS.map((n) => ({
+              value: String(n),
+              label: String(n),
+            }))}
+          />
         </FieldRow>
 
         <FieldRow
@@ -475,13 +548,14 @@ export default function SettingsPage() {
                 defaultModeLicenses: LICENSES_MODES.includes(m) ? m : "all",
               });
             }}
-          >
-            <option value="all">Все</option>
-            <option value="pinned">Закреплённые</option>
-            <option value="risk">Риск</option>
-            <option value="expiring">Скоро истекают</option>
-            <option value="deficit">Дефицит</option>
-          </Select>
+            options={[
+              { value: "all", label: "Все" },
+              { value: "pinned", label: "Закреплённые" },
+              { value: "risk", label: "Риск" },
+              { value: "expiring", label: "Скоро истекают" },
+              { value: "deficit", label: "Дефицит" },
+            ]}
+          />
         </FieldRow>
 
         <FieldRow
@@ -540,7 +614,79 @@ export default function SettingsPage() {
         </FieldRow>
       </Card>
 
-      {/* Advanced */}
+      <Card className="p-5 rounded-3xl border border-white/[0.08] bg-white/[0.02]">
+        <SectionTitle
+          icon={<Shield className="h-5 w-5 text-cyan-200/80" />}
+          title="Безопасность"
+          desc={
+            isAdmin
+              ? "Смена пароля текущего пользователя."
+              : "Смена пароля доступна только для admin."
+          }
+        />
+
+        {isAdmin ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Текущий пароль"
+                className={cn(
+                  "w-full rounded-2xl border p-3 text-sm",
+                  "bg-black/20 border-white/[0.10] text-white/85",
+                  "outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
+                )}
+              />
+
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Новый пароль"
+                className={cn(
+                  "w-full rounded-2xl border p-3 text-sm",
+                  "bg-black/20 border-white/[0.10] text-white/85",
+                  "outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
+                )}
+              />
+
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Повтори новый пароль"
+                className={cn(
+                  "w-full rounded-2xl border p-3 text-sm",
+                  "bg-black/20 border-white/[0.10] text-white/85",
+                  "outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
+                )}
+              />
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <SoftButton
+                onClick={doChangePassword}
+                icon={<Shield className="h-4 w-4" />}
+                disabled={passwordBusy}
+              >
+                {passwordBusy ? "Сохраняю..." : "Сменить пароль"}
+              </SoftButton>
+            </div>
+          </>
+        ) : (
+          <div className="mt-4 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
+            <div className="text-sm font-semibold text-white/85">
+              Недостаточно прав
+            </div>
+            <div className="mt-1 text-xs text-white/55">
+              Пользователь с ролью viewer не может менять пароль через эту страницу.
+            </div>
+          </div>
+        )}
+      </Card>
+
       <Card className="p-5 rounded-3xl border border-white/[0.08] bg-white/[0.02]">
         <SectionTitle
           icon={<Shield className="h-5 w-5 text-cyan-200/80" />}
@@ -564,9 +710,7 @@ export default function SettingsPage() {
               <Toggle
                 checked={settings.advanced.showDevPanel}
                 onChange={(v) => updateAdv({ showDevPanel: v })}
-                label={
-                  settings.advanced.showDevPanel ? "Включено" : "Выключено"
-                }
+                label={settings.advanced.showDevPanel ? "Включено" : "Выключено"}
               />
             </FieldRow>
 
@@ -577,11 +721,7 @@ export default function SettingsPage() {
               <Toggle
                 checked={settings.advanced.allowDangerZone}
                 onChange={(v) => updateAdv({ allowDangerZone: v })}
-                label={
-                  settings.advanced.allowDangerZone
-                    ? "Включено"
-                    : "Выключено"
-                }
+                label={settings.advanced.allowDangerZone ? "Включено" : "Выключено"}
               />
             </FieldRow>
 

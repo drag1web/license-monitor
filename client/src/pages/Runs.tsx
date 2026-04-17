@@ -15,6 +15,7 @@ import { cn } from "../ui/cn/cn";
 import { Dropdown } from "../components/Dropdown";
 import { ConfirmDialog } from "../ui/modal/ConfirmDialog";
 import { useConfirmDialog } from "../ui/modal/useConfirmDialog";
+import { useAuth } from "../auth/AuthContext";
 import {
   Table,
   TableInner,
@@ -90,7 +91,7 @@ function cmp(key: SortKey, dir: Exclude<SortDir, null>) {
   return (a: RunRow, b: RunRow) => {
     if (key === "run_at") return (parseTime(a.run_at) - parseTime(b.run_at)) * mul;
     if (numKeys.has(key)) return (getNum(a, key) - getNum(b, key)) * mul;
-    return String((a as any)[key]).localeCompare(String((b as any)[key])) * mul;
+    return String(a[key]).localeCompare(String(b[key])) * mul;
   };
 }
 
@@ -203,6 +204,9 @@ function MenuItem({
  * ------------------------------------------ */
 
 export default function Runs() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
@@ -211,7 +215,6 @@ export default function Runs() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const [menuOpen, setMenuOpen] = useState(false);
-  // ✅ ref не на Button (Button без forwardRef), а на span
   const menuAnchorRef = useRef<HTMLSpanElement | null>(null);
 
   const [selectMode, setSelectMode] = useState(false);
@@ -240,6 +243,13 @@ export default function Runs() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!isAdmin && selectMode) {
+      setSelectMode(false);
+      setSelected(new Set());
+    }
+  }, [isAdmin, selectMode]);
 
   const toggleSort = useCallback((key: SortKey, defaultDir: Exclude<SortDir, null>) => {
     setSortKey((prevKey) => {
@@ -275,19 +285,21 @@ export default function Runs() {
   }, [visible, selected]);
 
   const startSelectMode = useCallback(() => {
+    if (!isAdmin) return;
     setMenuOpen(false);
     setSelectMode(true);
     setSelected(new Set());
-  }, []);
+  }, [isAdmin]);
 
   const cancelSelectMode = useCallback(() => {
     setSelectMode(false);
     setSelected(new Set());
   }, []);
 
-  // ✅ selection tools работают даже когда selectMode OFF
   const withSelection = useCallback(
     (action: () => void) => {
+      if (!isAdmin) return;
+
       setMenuOpen(false);
       if (!selectMode) {
         setSelectMode(true);
@@ -295,19 +307,23 @@ export default function Runs() {
       }
       queueMicrotask(action);
     },
-    [selectMode]
+    [isAdmin, selectMode]
   );
 
   const toggleOne = useCallback((id: number) => {
+    if (!isAdmin) return;
+
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }, []);
+  }, [isAdmin]);
 
   const toggleAllVisible = useCallback(() => {
+    if (!isAdmin) return;
+
     setSelected((prev) => {
       if (visible.length === 0) return prev;
       const next = new Set(prev);
@@ -316,7 +332,7 @@ export default function Runs() {
       else for (const r of visible) next.add(r.id);
       return next;
     });
-  }, [visible]);
+  }, [isAdmin, visible]);
 
   const invertSelection = useCallback(() => {
     setSelected((prev) => {
@@ -344,11 +360,9 @@ export default function Runs() {
     setErr(ok ? "" : "Не удалось скопировать в clipboard (браузер запретил доступ).");
   }, [last]);
 
-  /* --------------------------
-   * Actions
-   * -------------------------- */
-
   const deleteSelected = useCallback(async () => {
+    if (!isAdmin) return;
+
     const ids = Array.from(selected);
     if (ids.length === 0) return;
 
@@ -382,10 +396,12 @@ export default function Runs() {
     } finally {
       setBusy(false);
     }
-  }, [selected, confirm, cancelSelectMode]);
+  }, [isAdmin, selected, confirm, cancelSelectMode]);
 
   const doOlderThan = useCallback(
     async (days: number) => {
+      if (!isAdmin) return;
+
       const ok = await confirm.ask({
         title: `Delete runs older than ${days} days?`,
         description: "Удалит историю запусков, которые старше указанного порога.",
@@ -407,11 +423,13 @@ export default function Runs() {
         setBusy(false);
       }
     },
-    [confirm, refresh]
+    [isAdmin, confirm, refresh]
   );
 
   const doKeepLast = useCallback(
     async (keepLast: number) => {
+      if (!isAdmin) return;
+
       const phrase = `KEEP_LAST_${keepLast}`;
 
       const ok = await confirm.ask({
@@ -428,7 +446,6 @@ export default function Runs() {
       setErr("");
       setBusy(true);
       try {
-        // backend ожидает confirm? — ты уже так сделал в api.ts
         await cleanupKeepLast(keepLast, phrase);
         await refresh();
       } catch (e: any) {
@@ -437,10 +454,12 @@ export default function Runs() {
         setBusy(false);
       }
     },
-    [confirm, refresh]
+    [isAdmin, confirm, refresh]
   );
 
   const doDeleteAll = useCallback(async () => {
+    if (!isAdmin) return;
+
     const ok = await confirm.ask({
       title: "Delete ALL runs?",
       description: "Удалит всю историю запусков (полная очистка). Это нельзя отменить.",
@@ -462,7 +481,7 @@ export default function Runs() {
     } finally {
       setBusy(false);
     }
-  }, [confirm, refresh]);
+  }, [isAdmin, confirm, refresh]);
 
   return (
     <Card className="p-5">
@@ -479,11 +498,17 @@ export default function Runs() {
         busy={busy}
         onCancel={confirm.cancel}
         onConfirm={confirm.confirm}
-        // хочешь фон сильнее — тут можно:
-        // overlayClassName="bg-black/75 backdrop-blur-[3px]"
       />
 
-      {/* Header */}
+      {!isAdmin && (
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+          <div className="text-sm font-semibold text-white/85">Режим просмотра</div>
+          <div className="mt-1 text-xs text-white/55">
+            У вас нет прав на удаление и очистку истории запусков.
+          </div>
+        </div>
+      )}
+
       <div className="flex items-end justify-between mb-4 gap-3">
         <div className="min-w-0">
           <div className="text-xs text-white/55">История</div>
@@ -526,14 +551,16 @@ export default function Runs() {
             sideOffset={10}
           >
             <MenuSection title="Actions">
-              <MenuItem
-                icon={<Trash2 className="h-4 w-4 text-rose-200/90" />}
-                title="Delete runs…"
-                description="Включить режим выбора"
-                right={runs.length}
-                disabled={busy}
-                onClick={startSelectMode}
-              />
+              {isAdmin && (
+                <MenuItem
+                  icon={<Trash2 className="h-4 w-4 text-rose-200/90" />}
+                  title="Delete runs…"
+                  description="Включить режим выбора"
+                  right={runs.length}
+                  disabled={busy}
+                  onClick={startSelectMode}
+                />
+              )}
 
               <MenuItem
                 icon={
@@ -571,94 +598,98 @@ export default function Runs() {
               />
             </MenuSection>
 
-            <MenuDivider />
+            {isAdmin && (
+              <>
+                <MenuDivider />
 
-            <MenuSection title="Selection tools">
-              <MenuItem
-                icon={<CalendarClock className="h-4 w-4 text-white/65" />}
-                title="Select last 10"
-                description="Из видимых 50"
-                disabled={busy}
-                onClick={() => withSelection(() => selectLastN(10))}
-              />
+                <MenuSection title="Selection tools">
+                  <MenuItem
+                    icon={<CalendarClock className="h-4 w-4 text-white/65" />}
+                    title="Select last 10"
+                    description="Из видимых 50"
+                    disabled={busy}
+                    onClick={() => withSelection(() => selectLastN(10))}
+                  />
 
-              <MenuItem
-                icon={<ShieldAlert className="h-4 w-4 text-amber-200/80" />}
-                title="Select risky only"
-                description="deficit/expiring/unmatched"
-                right={riskyCount}
-                disabled={busy}
-                onClick={() => withSelection(selectRiskyOnly)}
-                tone="warn"
-              />
+                  <MenuItem
+                    icon={<ShieldAlert className="h-4 w-4 text-amber-200/80" />}
+                    title="Select risky only"
+                    description="deficit/expiring/unmatched"
+                    right={riskyCount}
+                    disabled={busy}
+                    onClick={() => withSelection(selectRiskyOnly)}
+                    tone="warn"
+                  />
 
-              <MenuItem
-                icon={<Layers className="h-4 w-4 text-white/65" />}
-                title="Invert selection"
-                description="В пределах видимых 50"
-                disabled={busy}
-                onClick={() => withSelection(invertSelection)}
-              />
+                  <MenuItem
+                    icon={<Layers className="h-4 w-4 text-white/65" />}
+                    title="Invert selection"
+                    description="В пределах видимых 50"
+                    disabled={busy}
+                    onClick={() => withSelection(invertSelection)}
+                  />
 
-              <MenuItem
-                icon={<Minus className="h-4 w-4 text-white/65" />}
-                title="Clear selection"
-                description="Снять всё"
-                disabled={busy}
-                onClick={() => withSelection(clearSelection)}
-              />
-            </MenuSection>
+                  <MenuItem
+                    icon={<Minus className="h-4 w-4 text-white/65" />}
+                    title="Clear selection"
+                    description="Снять всё"
+                    disabled={busy}
+                    onClick={() => withSelection(clearSelection)}
+                  />
+                </MenuSection>
 
-            <MenuDivider />
+                <MenuDivider />
 
-            <MenuSection title="Retention">
-              <MenuItem
-                icon={<TimerReset className="h-4 w-4 text-amber-200/80" />}
-                title="Delete older than 30 days"
-                description="Очистка по возрасту"
-                disabled={busy}
-                onClick={() => doOlderThan(30)}
-                tone="warn"
-              />
-              <MenuItem
-                icon={<TimerReset className="h-4 w-4 text-amber-200/80" />}
-                title="Delete older than 90 days"
-                description="Очистка по возрасту"
-                disabled={busy}
-                onClick={() => doOlderThan(90)}
-                tone="warn"
-              />
+                <MenuSection title="Retention">
+                  <MenuItem
+                    icon={<TimerReset className="h-4 w-4 text-amber-200/80" />}
+                    title="Delete older than 30 days"
+                    description="Очистка по возрасту"
+                    disabled={busy}
+                    onClick={() => doOlderThan(30)}
+                    tone="warn"
+                  />
+                  <MenuItem
+                    icon={<TimerReset className="h-4 w-4 text-amber-200/80" />}
+                    title="Delete older than 90 days"
+                    description="Очистка по возрасту"
+                    disabled={busy}
+                    onClick={() => doOlderThan(90)}
+                    tone="warn"
+                  />
 
-              <MenuDivider />
+                  <MenuDivider />
 
-              <MenuItem
-                icon={<HardDrive className="h-4 w-4 text-rose-200/90" />}
-                title="Keep only last 50"
-                description="Потребует ввод KEEP_LAST_50"
-                disabled={busy}
-                onClick={() => doKeepLast(50)}
-                tone="danger"
-              />
-              <MenuItem
-                icon={<HardDrive className="h-4 w-4 text-rose-200/90" />}
-                title="Keep only last 200"
-                description="Потребует ввод KEEP_LAST_200"
-                disabled={busy}
-                onClick={() => doKeepLast(200)}
-                tone="danger"
-              />
+                  <MenuItem
+                    icon={<HardDrive className="h-4 w-4 text-rose-200/90" />}
+                    title="Keep only last 50"
+                    description="Потребует ввод KEEP_LAST_50"
+                    disabled={busy}
+                    onClick={() => doKeepLast(50)}
+                    tone="danger"
+                  />
+                  <MenuItem
+                    icon={<HardDrive className="h-4 w-4 text-rose-200/90" />}
+                    title="Keep only last 200"
+                    description="Потребует ввод KEEP_LAST_200"
+                    disabled={busy}
+                    onClick={() => doKeepLast(200)}
+                    tone="danger"
+                  />
 
-              <MenuDivider />
+                  <MenuDivider />
 
-              <MenuItem
-                icon={<Skull className="h-4 w-4 text-rose-200/90" />}
-                title="Delete ALL runs"
-                description="Потребует ввод DELETE_ALL"
-                disabled={busy}
-                onClick={doDeleteAll}
-                tone="danger"
-              />
-            </MenuSection>
+                  <MenuItem
+                    icon={<Skull className="h-4 w-4 text-rose-200/90" />}
+                    title="Delete ALL runs"
+                    description="Потребует ввод DELETE_ALL"
+                    disabled={busy}
+                    onClick={doDeleteAll}
+                    tone="danger"
+                  />
+                </MenuSection>
+              </>
+            )}
 
             <MenuDivider />
 
@@ -684,7 +715,7 @@ export default function Runs() {
           title="Запуски"
           description="Сводка по последним проверкам и результатам сопоставления."
           right={
-            selectMode ? (
+            isAdmin && selectMode ? (
               <div className="flex items-center gap-2">
                 <div className="text-[11px] text-white/45">
                   Selected: <span className="text-white/80">{selected.size}</span>
@@ -720,18 +751,22 @@ export default function Runs() {
         />
 
         {loading ? (
-          <TableSkeleton rows={6} cols={selectMode ? 7 : 6} />
+          <TableSkeleton rows={6} cols={isAdmin && selectMode ? 7 : 6} />
         ) : visible.length === 0 ? (
           <TableEmpty
             title="Пока нет запусков"
-            description="Запусти проверку лицензий — и тут появится история."
+            description={
+              isAdmin
+                ? "Запусти проверку лицензий — и тут появится история."
+                : "История запусков пока пуста."
+            }
           />
         ) : (
           <TableScroll className="max-h-[60vh]">
             <TableInner stickyHeader density="comfortable">
               <THead>
                 <tr>
-                  {selectMode && (
+                  {isAdmin && selectMode && (
                     <th className="px-3 py-2 text-left">
                       <button
                         onClick={toggleAllVisible}
@@ -800,11 +835,11 @@ export default function Runs() {
                     <Tr
                       key={r.id}
                       className={cn(
-                        selectMode && checked && "bg-white/[0.03]",
+                        isAdmin && selectMode && checked && "bg-white/[0.03]",
                         risky && "border-l-2 border-amber-300/25"
                       )}
                     >
-                      {selectMode && (
+                      {isAdmin && selectMode && (
                         <Td>
                           <button
                             onClick={() => toggleOne(r.id)}

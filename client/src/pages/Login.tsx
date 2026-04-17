@@ -32,8 +32,8 @@ import { cn } from "../ui/cn/cn";
  */
 
 const schema = z.object({
-  login: z.string().min(2, "Минимум 2 символа"),
-  password: z.string().min(2, "Минимум 2 символа"),
+  login: z.string().min(3, "Минимум 3 символа"),
+  password: z.string().min(4, "Минимум 4 символа"),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -69,10 +69,10 @@ function Pill({
     tone === "ok"
       ? "border-emerald-300/20 bg-emerald-500/10 text-emerald-100"
       : tone === "warn"
-      ? "border-amber-300/20 bg-amber-500/10 text-amber-100"
-      : tone === "info"
-      ? "border-cyan-300/20 bg-cyan-500/10 text-cyan-100"
-      : "border-white/10 bg-white/[0.03] text-white/70";
+        ? "border-amber-300/20 bg-amber-500/10 text-amber-100"
+        : tone === "info"
+          ? "border-cyan-300/20 bg-cyan-500/10 text-cyan-100"
+          : "border-white/10 bg-white/[0.03] text-white/70";
 
   return (
     <span
@@ -101,8 +101,8 @@ function GlassPanel({
     glow === "indigo"
       ? "bg-indigo-500/10"
       : glow === "emerald"
-      ? "bg-emerald-400/10"
-      : "bg-cyan-400/10";
+        ? "bg-emerald-400/10"
+        : "bg-cyan-400/10";
 
   return (
     <div
@@ -186,11 +186,12 @@ function DividerLabel({ children }: { children: React.ReactNode }) {
 
 export default function Login() {
   const nav = useNavigate();
-  const { login: doLogin } = useAuth();
+  const { login: doLogin, register: doRegister } = useAuth();
 
   const [show, setShow] = useState(false);
   const [apiError, setApiError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState<"login" | "register">("login");
 
   const {
     register,
@@ -229,11 +230,18 @@ export default function Login() {
 
   async function onSubmit(v: FormValues) {
     setApiError("");
+
     try {
-      await doLogin(v.login.trim(), v.password);
+      if (mode === "login") {
+        await doLogin(v.login.trim(), v.password);
+      } else {
+        await doRegister(v.login.trim(), v.password);
+      }
+
       nav("/", { replace: true });
-    } catch (e: any) {
-      setApiError(String(e?.message ?? e));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setApiError(msg);
       setTimeout(() => setFocus("password"), 0);
     }
   }
@@ -341,8 +349,8 @@ export default function Login() {
                             t.tone === "info"
                               ? "border-cyan-300/20 bg-cyan-500/10 text-cyan-100"
                               : t.tone === "warn"
-                              ? "border-amber-300/20 bg-amber-500/10 text-amber-100"
-                              : "border-white/10 bg-white/[0.03] text-white/70"
+                                ? "border-amber-300/20 bg-amber-500/10 text-amber-100"
+                                : "border-white/10 bg-white/[0.03] text-white/70"
                           )}
                         >
                           {t.icon}
@@ -397,10 +405,12 @@ export default function Login() {
                     Добро пожаловать
                   </div>
                   <div className="text-2xl font-semibold mt-1 text-white/90">
-                    Войти в систему
+                    {mode === "login" ? "Войти в систему" : "Создать аккаунт"}
                   </div>
                   <div className="mt-1 text-sm text-white/50">
-                    Авторизация нужна, чтобы управлять проверками и отчётами.
+                    {mode === "login"
+                      ? "Авторизация нужна, чтобы управлять проверками и отчётами."
+                      : "Создай локальную учетную запись для работы с системой."}
                   </div>
                 </div>
 
@@ -420,7 +430,7 @@ export default function Login() {
                   >
                     <div className="flex items-center gap-2 font-semibold text-rose-100">
                       <TriangleAlert className="h-4 w-4" />
-                      Ошибка входа
+                      {mode === "login" ? "Ошибка входа" : "Ошибка регистрации"}
                     </div>
                     <div className="text-white/75 mt-0.5">{apiError}</div>
                   </motion.div>
@@ -498,14 +508,36 @@ export default function Login() {
                     ) : (
                       <ArrowRight className="h-4 w-4" />
                     )}
-                    {isSubmitting ? "Выполняю вход..." : "Войти"}
+                    {isSubmitting
+                      ? mode === "login"
+                        ? "Выполняю вход..."
+                        : "Создаю аккаунт..."
+                      : mode === "login"
+                        ? "Войти"
+                        : "Зарегистрироваться"}
                   </span>
                   <span className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 hover:opacity-100 transition bg-[radial-gradient(120px_60px_at_50%_0%,rgba(255,255,255,0.65),transparent_70%)]" />
                 </motion.button>
 
                 <div className="text-xs text-white/45 text-center pt-1">
-                  Нажимая “Войти”, ты подтверждаешь доступ к запуску проверок и
-                  скачиванию отчётов.
+                  {mode === "login"
+                    ? "Нажимая “Войти”, ты подтверждаешь доступ к запуску проверок и скачиванию отчётов."
+                    : "Нажимая “Зарегистрироваться”, ты создаёшь локальную учетную запись для работы с системой."}
+                </div>
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApiError("");
+                      setMode((m) => (m === "login" ? "register" : "login"));
+                    }}
+                    className="text-sm text-cyan-200/85 hover:text-cyan-200 transition underline underline-offset-4"
+                  >
+                    {mode === "login"
+                      ? "Нет аккаунта? Зарегистрироваться"
+                      : "Уже есть аккаунт? Войти"}
+                  </button>
                 </div>
               </form>
 

@@ -12,6 +12,7 @@ import { computeRunDiff, diffScore } from "../ui/diff/runDiff";
 import { Card } from "../ui/Card";
 import { cn } from "../ui/cn/cn";
 import { useToast } from "../ui/toast";
+import { useAuth } from "../auth/AuthContext";
 import {
   Table,
   TableInner,
@@ -502,6 +503,8 @@ export default function Dashboard() {
   const prev = orderedRuns[1];
 
   const toast = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const tone = severityFrom(last);
 
@@ -567,38 +570,47 @@ export default function Dashboard() {
 
   // Diff vs prev: load results for last & prev
   useEffect(() => {
-  const last = orderedRuns[0];
-  const prev = orderedRuns[1];
+    const last = orderedRuns[0];
+    const prev = orderedRuns[1];
 
-  if (!last || !prev) {
-    setDiff(null);
-    return;
-  }
+    if (!last || !prev) {
+      setDiff(null);
+      return;
+    }
 
-  let alive = true;
-  setDiffLoading(true);
-  setDiffErr("");
+    let alive = true;
+    setDiffLoading(true);
+    setDiffErr("");
 
-  Promise.all([getRunResults(last.id), getRunResults(prev.id)])
-    .then(([nowRows, prevRows]) => {
-      if (!alive) return;
-      setDiff(computeRunDiff(nowRows, prevRows));
-    })
-    .catch((e) => {
-      if (!alive) return;
-      setDiffErr(String(e?.message ?? e));
-    })
-    .finally(() => {
-      if (!alive) return;
-      setDiffLoading(false);
-    });
+    Promise.all([getRunResults(last.id), getRunResults(prev.id)])
+      .then(([nowRows, prevRows]) => {
+        if (!alive) return;
+        setDiff(computeRunDiff(nowRows, prevRows));
+      })
+      .catch((e) => {
+        if (!alive) return;
+        setDiffErr(String(e?.message ?? e));
+      })
+      .finally(() => {
+        if (!alive) return;
+        setDiffLoading(false);
+      });
 
-  return () => {
-    alive = false;
-  };
-}, [orderedRuns]);
+    return () => {
+      alive = false;
+    };
+  }, [orderedRuns]);
 
   async function onRun() {
+    if (!isAdmin) {
+      toast.push({
+        tone: "error",
+        title: "Недостаточно прав",
+        message: "Только admin может запускать проверку.",
+      });
+      return;
+    }
+
     setBusy(true);
     setErr("");
 
@@ -668,7 +680,9 @@ export default function Dashboard() {
         ? "Есть истекающие или unmatched — проверь отчёты."
         : tone === "bad"
           ? "Обнаружены дефициты — срочно разберись."
-          : "Запусти первую проверку, чтобы увидеть состояние.";
+          : isAdmin
+            ? "Запусти первую проверку, чтобы увидеть состояние."
+            : "Ожидается первый запуск проверки, чтобы показать состояние системы.";
 
   const heroAccent =
     tone === "ok"
@@ -757,15 +771,17 @@ export default function Dashboard() {
 
             {/* Right actions */}
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              <SoftButton
-                variant="primary"
-                onClick={onRun}
-                disabled={busy}
-                leftIcon={<Play className="h-4 w-4" />}
-                title="Запустить проверку"
-              >
-                {busy ? "Запускаю..." : "Запустить"}
-              </SoftButton>
+              {isAdmin && (
+                <SoftButton
+                  variant="primary"
+                  onClick={onRun}
+                  disabled={busy}
+                  leftIcon={<Play className="h-4 w-4" />}
+                  title="Запустить проверку"
+                >
+                  {busy ? "Запускаю..." : "Запустить"}
+                </SoftButton>
+              )}
 
               <SoftButton
                 onClick={() => refresh()}
@@ -815,6 +831,15 @@ export default function Dashboard() {
               <div className="text-sm font-semibold text-rose-100">Ошибка</div>
               <div className="mt-1 text-xs text-rose-200/80 break-words">
                 {err}
+              </div>
+            </div>
+          )}
+
+          {!isAdmin && (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+              <div className="text-sm font-semibold text-white/85">Режим просмотра</div>
+              <div className="mt-1 text-xs text-white/55">
+                У вас нет прав на запуск новых проверок. Доступен просмотр истории и скачивание отчётов.
               </div>
             </div>
           )}
@@ -1101,7 +1126,11 @@ export default function Dashboard() {
           ) : sortedRuns.length === 0 ? (
             <TableEmpty
               title="Запусков пока нет"
-              description="Нажми «Запустить», чтобы создать первый прогон."
+              description={
+                isAdmin
+                  ? "Нажми «Запустить», чтобы создать первый прогон."
+                  : "История запусков пока пуста."
+              }
             />
           ) : (
             <TableScroll className="max-h-[62vh]">

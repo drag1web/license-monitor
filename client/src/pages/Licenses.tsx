@@ -6,6 +6,7 @@ import { Button } from "../ui/Button";
 
 import { getLicenses, upsertLicense, removeLicense, type LicenseRow } from "../api";
 import { useToast } from "../ui/toast";
+import { useAuth } from "../auth/AuthContext";
 
 import { ConfirmDialog } from "../ui/modal/ConfirmDialog";
 import { useConfirmDialog } from "../ui/modal/useConfirmDialog";
@@ -74,6 +75,8 @@ export default function Licenses() {
   const toast = useToast();
   const confirm = useConfirmDialog();
   const { settings, setSettings } = useSettings();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   // mounted guard (avoid setState after unmount)
   const mounted = useRef(true);
@@ -184,7 +187,7 @@ export default function Licenses() {
   // Sync: UI -> Settings (persist defaults)
   // ------------------------------------------
   useEffect(() => {
-    setSettings((s) => (s.density === density ? s : { ...s, density: density}));
+    setSettings((s) => (s.density === density ? s : { ...s, density: density }));
   }, [density, setSettings]);
 
   useEffect(() => {
@@ -207,7 +210,7 @@ export default function Licenses() {
 
   useEffect(() => {
     setSettings((s) =>
-      s.data.defaultModeLicenses === mode ? s : { ...s, data: { ...s.data, defaultModeLicenses: mode} }
+      s.data.defaultModeLicenses === mode ? s : { ...s, data: { ...s.data, defaultModeLicenses: mode } }
     );
   }, [mode, setSettings]);
 
@@ -282,14 +285,32 @@ export default function Licenses() {
   // UI actions
   // ------------------------------------------
   const openAdd = useCallback(() => {
+    if (!isAdmin) {
+      toast.push({
+        tone: "error",
+        title: "Недостаточно прав",
+        message: "Только admin может добавлять лицензии.",
+      });
+      return;
+    }
+
     setDraft(makeEmptyDraft());
     setOpen(true);
-  }, []);
+  }, [isAdmin, toast]);
 
   const openEditRow = useCallback((row: LicenseRow) => {
+    if (!isAdmin) {
+      toast.push({
+        tone: "error",
+        title: "Недостаточно прав",
+        message: "Только admin может редактировать лицензии.",
+      });
+      return;
+    }
+
     setDraft(fromRow(row));
     setOpen(true);
-  }, []);
+  }, [isAdmin, toast]);
 
   const closeEditor = useCallback(() => setOpen(false), []);
 
@@ -364,6 +385,15 @@ export default function Licenses() {
 
   const save = useCallback(async () => {
     const msg = validateDraft(draft);
+    if (!isAdmin) {
+      toast.push({
+        tone: "error",
+        title: "Недостаточно прав",
+        message: "Только admin может изменять реестр лицензий.",
+      });
+      return;
+    }
+
     if (msg) {
       toast.push({ tone: "error", title: "Проверка", message: msg });
       return;
@@ -397,7 +427,7 @@ export default function Licenses() {
     } finally {
       setSaving(false);
     }
-  }, [draft, toast]);
+  }, [draft, isAdmin, toast]);
 
   const askDelete = useCallback(
     async (title: string, description: string, confirmLabel: string) => {
@@ -415,6 +445,15 @@ export default function Licenses() {
 
   const delOne = useCallback(
     async (row: LicenseRow) => {
+      if (!isAdmin) {
+        toast.push({
+          tone: "error",
+          title: "Недостаточно прав",
+          message: "Только admin может удалять лицензии.",
+        });
+        return;
+      }
+
       const ok = await askDelete(
         `Delete license "${row.product}"?`,
         "Запись будет удалена из local registry.",
@@ -436,11 +475,19 @@ export default function Licenses() {
         toast.push({ tone: "error", title: "Удаление не удалось", message: msg });
       }
     },
-    [askDelete, toast]
+    [isAdmin, askDelete, toast]
   );
 
   const bulkDelete = useCallback(async () => {
     const ids = Array.from(selected);
+    if (!isAdmin) {
+      toast.push({
+        tone: "error",
+        title: "Недостаточно прав",
+        message: "Только admin может удалять лицензии.",
+      });
+      return;
+    }
     if (ids.length === 0) return;
 
     const ok = await askDelete(
@@ -486,11 +533,19 @@ export default function Licenses() {
     } finally {
       setBulkBusy(false);
     }
-  }, [selected, askDelete, toast, stopSelectMode]);
+  }, [isAdmin, selected, askDelete, toast, stopSelectMode]);
 
   const seedDemo = useCallback(() => {
     const now = new Date();
     const iso = (d: Date) => d.toISOString().slice(0, 10);
+    if (!isAdmin) {
+      toast.push({
+        tone: "error",
+        title: "Недостаточно прав",
+        message: "Только admin может добавлять демо-данные.",
+      });
+      return;
+    }
 
     const demo: LicenseRow[] = [
       {
@@ -538,7 +593,7 @@ export default function Licenses() {
         toast.push({ tone: "error", title: "Seed demo failed", message: msg });
       }
     })();
-  }, [toast, load]);
+  }, [isAdmin, toast, load]);
 
   const onToggleSort = useCallback((key: SortKey) => {
     setSortKey((prevKey) => {
@@ -564,24 +619,40 @@ export default function Licenses() {
 
   const commitSeatsEdit = useCallback(
     async (row: LicenseRow) => {
+      if (!isAdmin) {
+        toast.push({
+          tone: "error",
+          title: "Недостаточно прав",
+          message: "Только admin может редактировать лицензии.",
+        });
+        return;
+      }
+
       const used = Math.max(0, safeNum(tmpUsed));
       const total = Math.max(0, safeNum(tmpTotal));
 
       setEditingSeatsId(null);
 
-      // optimistic update
-      setRows((prev) => prev.map((x) => (x.id === row.id ? { ...x, seats_used: used, seats_total: total } : x)));
+      setRows((prev) =>
+        prev.map((x) =>
+          x.id === row.id ? { ...x, seats_used: used, seats_total: total } : x
+        )
+      );
 
       try {
         await upsertLicense({ ...row, seats_used: used, seats_total: total });
-        toast.push({ tone: "success", title: "Updated", message: `${row.product}: ${used}/${total}` });
+        toast.push({
+          tone: "success",
+          title: "Updated",
+          message: `${row.product}: ${used}/${total}`,
+        });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         toast.push({ tone: "error", title: "Save failed", message: msg });
-        load(); // rollback by reload (safe)
+        load();
       }
     },
-    [tmpUsed, tmpTotal, toast, load]
+    [isAdmin, tmpUsed, tmpTotal, toast, load]
   );
 
   // Row menu actions
@@ -615,7 +686,7 @@ export default function Licenses() {
     );
   }
 
-  const bulkBarNode = selectMode ? (
+  const bulkBarNode = isAdmin && selectMode ? (
     <BulkBar
       selectedCount={selected.size}
       allVisibleSelected={allVisibleSelected}
@@ -651,15 +722,17 @@ export default function Licenses() {
       />
 
       {/* EDITOR */}
-      <LicenseEditorDialog
-        open={open}
-        isEdit={isEdit}
-        draft={draft}
-        setDraft={setDraft}
-        saving={saving}
-        onClose={closeEditor}
-        onSave={save}
-      />
+      {isAdmin && (
+        <LicenseEditorDialog
+          open={open}
+          isEdit={isEdit}
+          draft={draft}
+          setDraft={setDraft}
+          saving={saving}
+          onClose={closeEditor}
+          onSave={save}
+        />
+      )}
 
       <LicensesHero
         counts={counts}
@@ -670,9 +743,9 @@ export default function Licenses() {
         setQ={setQ}
         mode={mode}
         setMode={setMode}
-        selectMode={selectMode}
-        onStartSelectMode={startSelectMode}
-        onStopSelectMode={stopSelectMode}
+        selectMode={isAdmin ? selectMode : false}
+        onStartSelectMode={isAdmin ? startSelectMode : () => { }}
+        onStopSelectMode={isAdmin ? stopSelectMode : () => { }}
         density={density}
         setDensity={setDensity}
         showVendor={showVendor}
@@ -684,9 +757,9 @@ export default function Licenses() {
         sortKey={sortKey}
         sortDir={sortDir}
         onToggleSort={onToggleSort}
-        onSeedDemo={seedDemo}
+        onSeedDemo={isAdmin ? seedDemo : () => { }}
         onReload={load}
-        onOpenAdd={openAdd}
+        onOpenAdd={isAdmin ? openAdd : () => { }}
         bulkBar={bulkBarNode}
       />
 
@@ -695,13 +768,13 @@ export default function Licenses() {
         rowsCount={rows.length}
         sorted={sorted}
         density={density}
-        selectMode={selectMode}
+        selectMode={isAdmin ? selectMode : false}
         selected={selected}
         stickyHeader={settings.data.stickyHeader}
         disableEffectsWhileScroll={settings.perf.disableEffectsWhileScroll}
         allVisibleSelected={allVisibleSelected}
-        onToggleAllVisible={toggleAllVisible}
-        onToggleOne={toggleOne}
+        onToggleAllVisible={isAdmin ? toggleAllVisible : () => { }}
+        onToggleOne={isAdmin ? toggleOne : () => { }}
         showVendor={showVendor}
         showType={showType}
         showNote={showNote}
@@ -710,36 +783,40 @@ export default function Licenses() {
         onToggleSort={onToggleSort}
         pinned={pinned}
         onTogglePin={togglePin}
-        editingSeatsId={editingSeatsId}
+        editingSeatsId={isAdmin ? editingSeatsId : null}
         tmpUsed={tmpUsed}
         tmpTotal={tmpTotal}
         setTmpUsed={setTmpUsed}
         setTmpTotal={setTmpTotal}
-        onBeginSeatsEdit={beginSeatsEdit}
-        onCancelSeatsEdit={cancelSeatsEdit}
-        onCommitSeatsEdit={commitSeatsEdit}
-        onOpenEditRow={openEditRow}
-        onOpenRowMenu={openRowMenu}
-        onSeedDemo={seedDemo}
-        onOpenAdd={openAdd}
+        onBeginSeatsEdit={isAdmin ? beginSeatsEdit : () => { }}
+        onCancelSeatsEdit={isAdmin ? cancelSeatsEdit : () => { }}
+        onCommitSeatsEdit={isAdmin ? commitSeatsEdit : () => { }}
+        onOpenEditRow={isAdmin ? openEditRow : () => { }}
+        onOpenRowMenu={isAdmin ? openRowMenu : () => { }}
+        onSeedDemo={isAdmin ? seedDemo : () => { }}
+        onOpenAdd={isAdmin ? openAdd : () => { }}
       />
 
       <div className="flex items-center gap-2 text-[12px] text-white/45">
         <AlertTriangle className="h-4 w-4 text-white/40" />
-        Delete — удаляет только запись из local registry (не трогает реальные лицензии в системе).
+        {isAdmin
+          ? "Delete — удаляет только запись из local registry (не трогает реальные лицензии в системе)."
+          : "У вас режим только для чтения. Изменение реестра лицензий доступно только admin."}
       </div>
 
-      <RowMenu
-        open={menuFor != null}
-        anchorEl={menuAnchorRef.current}
-        row={menuRow}
-        isPinned={menuPinned}
-        onClose={closeRowMenu}
-        onEdit={() => menuRow && openEditRow(menuRow)}
-        onDuplicate={() => menuRow && duplicateRow(menuRow)}
-        onTogglePin={() => menuRow && togglePin(menuRow.id)}
-        onDelete={() => menuRow && delOne(menuRow)}
-      />
+      {isAdmin && (
+        <RowMenu
+          open={menuFor != null}
+          anchorEl={menuAnchorRef.current}
+          row={menuRow}
+          isPinned={menuPinned}
+          onClose={closeRowMenu}
+          onEdit={() => menuRow && openEditRow(menuRow)}
+          onDuplicate={() => menuRow && duplicateRow(menuRow)}
+          onTogglePin={() => menuRow && togglePin(menuRow.id)}
+          onDelete={() => menuRow && delOne(menuRow)}
+        />
+      )}
     </div>
   );
 }

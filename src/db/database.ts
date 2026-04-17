@@ -17,6 +17,7 @@ export type DB = {
   transaction: <T extends (...args: any[]) => any>(fn: T) => T;
 };
 
+export type UserRole = "admin" | "viewer";
 
 export type RunStats = {
   run_at: string;
@@ -30,13 +31,13 @@ export type UserRow = {
   id: number;
   login: string;
   password_hash: string;
+  role: UserRole;
   created_at: string;
 };
 
 export function initDatabase(dbPath: string): DB {
   mkdirSync(dirname(dbPath), { recursive: true });
 
-  // better-sqlite3 — default export это функция-конструктор
   const db = new (BetterSqlite3 as unknown as { new (p: string): DB })(dbPath);
 
   db.exec(`
@@ -77,18 +78,24 @@ export function initDatabase(dbPath: string): DB {
     CREATE INDEX IF NOT EXISTS idx_results_run_id ON results(run_id);
     CREATE INDEX IF NOT EXISTS idx_results_product_key ON results(product_key);
 
-    -- AUTH
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       login TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'admin',
       created_at TEXT NOT NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_users_login ON users(login);
   `);
 
-  // на всякий: создадим admin/admin при первом запуске
+  const columns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
+  const hasRole = columns.some((c) => c.name === "role");
+
+  if (!hasRole) {
+    db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin';`);
+  }
+
   ensureAdminUser(db);
 
   return db;
@@ -102,14 +109,15 @@ export function ensureAdminUser(db: DB) {
   if (row?.id) return;
 
   const password_hash = bcrypt.hashSync("admin", 10);
+
   db.prepare(
-    `INSERT INTO users(login, password_hash, created_at) VALUES (?, ?, ?)`
-  ).run("admin", password_hash, new Date().toISOString());
+    `INSERT INTO users(login, password_hash, role, created_at) VALUES (?, ?, ?, ?)`
+  ).run("admin", password_hash, "admin", new Date().toISOString());
 }
 
 export function findUserByLogin(db: DB, login: string): UserRow | null {
   const row = db
-    .prepare(`SELECT id, login, password_hash, created_at FROM users WHERE login = ?`)
+    .prepare(`SELECT id, login, password_hash, role, created_at FROM users WHERE login = ?`)
     .get(login) as UserRow | undefined;
 
   return row ?? null;
@@ -117,9 +125,10 @@ export function findUserByLogin(db: DB, login: string): UserRow | null {
 
 export function createUser(db: DB, login: string, password: string): number {
   const password_hash = bcrypt.hashSync(password, 10);
+
   const res = db
-    .prepare(`INSERT INTO users(login, password_hash, created_at) VALUES(?, ?, ?)`)
-    .run(login, password_hash, new Date().toISOString());
+    .prepare(`INSERT INTO users(login, password_hash, role, created_at) VALUES (?, ?, ?, ?)`)
+    .run(login, password_hash, "viewer", new Date().toISOString());
 
   return Number(res.lastInsertRowid);
 }

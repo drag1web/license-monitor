@@ -24,7 +24,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 type AuthedReq = Request & {
-  session: session.Session & { user?: { id: number; login: string } };
+  session: session.Session & {
+    user?: { id: number; login: string; role: "admin" | "viewer" };
+  };
 };
 
 async function loadConfig(): Promise<Config> {
@@ -69,6 +71,22 @@ function requireAuth(req: AuthedReq, res: Response, next: NextFunction) {
     return;
   }
   next();
+}
+
+function requireRole(role: "admin" | "viewer") {
+  return (req: AuthedReq, res: Response, next: NextFunction) => {
+    if (!req.session?.user) {
+      res.status(401).json({ ok: false, error: "unauthorized" });
+      return;
+    }
+
+    if (req.session.user.role !== role) {
+      res.status(403).json({ ok: false, error: "forbidden" });
+      return;
+    }
+
+    next();
+  };
 }
 
 async function main() {
@@ -116,8 +134,10 @@ async function main() {
     }
 
     const row = db
-      .prepare("SELECT id, login, password_hash FROM users WHERE login=?")
-      .get(login) as { id: number; login: string; password_hash: string } | undefined;
+      .prepare("SELECT id, login, password_hash, role FROM users WHERE login=?")
+      .get(login) as
+      | { id: number; login: string; password_hash: string; role: "admin" | "viewer" }
+      | undefined;
 
     if (!row) {
       res.status(401).json({ ok: false, error: "bad credentials" });
@@ -130,8 +150,108 @@ async function main() {
       return;
     }
 
-    req.session.user = { id: row.id, login: row.login };
+    req.session.user = { id: row.id, login: row.login, role: row.role };
     res.json({ ok: true, user: req.session.user });
+  });
+
+  app.post("/api/auth/register", (req: AuthedReq, res: Response) => {
+    const { login, password } = req.body ?? {};
+
+    if (!login || !password) {
+      res.status(400).json({ ok: false, error: "login/password required" });
+      return;
+    }
+
+    const cleanLogin = String(login).trim();
+
+    if (cleanLogin.length < 3) {
+      res.status(400).json({ ok: false, error: "login must be at least 3 chars" });
+      return;
+    }
+
+    if (String(password).length < 4) {
+      res.status(400).json({ ok: false, error: "password must be at least 4 chars" });
+      return;
+    }
+
+    const existing = db
+      .prepare("SELECT id FROM users WHERE login = ?")
+      .get(cleanLogin) as { id: number } | undefined;
+
+    if (existing) {
+      res.status(409).json({ ok: false, error: "user already exists" });
+      return;
+    }
+
+    try {
+      const result = db
+        .prepare("INSERT INTO users(login, password_hash, role, created_at) VALUES (?, ?, ?, ?)")
+        .run(
+          cleanLogin,
+          bcrypt.hashSync(String(password), 10),
+          "viewer",
+          new Date().toISOString()
+        );
+
+      const user = {
+        id: Number(result.lastInsertRowid),
+        login: cleanLogin,
+        role: "viewer" as const,
+      };
+
+      req.session.user = user;
+
+      res.json({ ok: true, user });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.post("/api/auth/change-password", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
+    const { currentPassword, newPassword } = req.body ?? {};
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ ok: false, error: "currentPassword/newPassword required" });
+      return;
+    }
+
+    if (String(newPassword).length < 4) {
+      res.status(400).json({ ok: false, error: "new password must be at least 4 chars" });
+      return;
+    }
+
+    const userLogin = req.session.user?.login;
+    if (!userLogin) {
+      res.status(401).json({ ok: false, error: "unauthorized" });
+      return;
+    }
+
+    const row = db
+      .prepare("SELECT id, login, password_hash FROM users WHERE login = ?")
+      .get(userLogin) as { id: number; login: string; password_hash: string } | undefined;
+
+    if (!row) {
+      res.status(404).json({ ok: false, error: "user not found" });
+      return;
+    }
+
+    const ok = bcrypt.compareSync(String(currentPassword), row.password_hash);
+    if (!ok) {
+      res.status(401).json({ ok: false, error: "current password is incorrect" });
+      return;
+    }
+
+    try {
+      const nextHash = bcrypt.hashSync(String(newPassword), 10);
+
+      db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(nextHash, row.id);
+
+      res.json({ ok: true });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
   });
 
   app.post("/api/auth/logout", (req: AuthedReq, res: Response) => {
@@ -157,7 +277,7 @@ async function main() {
     res.json(getRunResults(db, runId));
   });
 
-  app.delete("/api/runs/:id", requireAuth, (req: Request, res: Response) => {
+  app.delete("/api/runs/:id", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
     const runId = Number(req.params.id);
     if (!Number.isFinite(runId) || runId <= 0) {
       res.status(400).json({ ok: false, error: "bad run id" });
@@ -180,7 +300,7 @@ async function main() {
   });
 
   // bulk delete by ids
-  app.post("/api/runs/bulk-delete", requireAuth, (req: AuthedReq, res: Response) => {
+  app.post("/api/runs/bulk-delete", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
     const idsRaw = req.body?.ids;
 
     if (!Array.isArray(idsRaw)) {
@@ -200,7 +320,7 @@ async function main() {
   });
 
   // cleanup: keep last N
-  app.post("/api/runs/cleanup/keep-last", requireAuth, (req: AuthedReq, res: Response) => {
+  app.post("/api/runs/cleanup/keep-last", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
     const keepLast = Number(req.body?.keepLast);
 
     if (!Number.isFinite(keepLast) || keepLast < 0) {
@@ -227,7 +347,7 @@ async function main() {
   });
 
   // cleanup: older than N days
-  app.post("/api/runs/cleanup/older-than", requireAuth, (req: AuthedReq, res: Response) => {
+  app.post("/api/runs/cleanup/older-than", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
     const days = Number(req.body?.days);
 
     if (!Number.isFinite(days) || days < 0) {
@@ -245,7 +365,7 @@ async function main() {
   });
 
   // optional explicit delete all (если хочешь отдельной кнопкой)
-  app.post("/api/runs/cleanup/delete-all", requireAuth, (req: AuthedReq, res: Response) => {
+  app.post("/api/runs/cleanup/delete-all", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
     if (req.body?.confirm !== "DELETE_ALL") {
       res.status(400).json({ ok: false, error: 'Set confirm="DELETE_ALL"' });
       return;
@@ -261,7 +381,7 @@ async function main() {
   });
 
   // запуск проверки — строго только после логина
-  app.post("/api/run", requireAuth, async (_req: Request, res: Response) => {
+  app.post("/api/run", requireAuth, requireRole("admin"), async (_req: Request, res: Response) => {
     try {
       const out = await runPipeline(config);
       res.json({ ok: true, runId: out.runId });
@@ -303,6 +423,7 @@ async function main() {
     console.log("  GET  /api/runs/:id (auth)");
     console.log("  POST /api/run (auth)");
     console.log("DOWNLOADS (auth): /download/*");
+    console.log("  POST /api/auth/change-password {currentPassword,newPassword}");
   });
 }
 

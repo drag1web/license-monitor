@@ -1,12 +1,20 @@
 @import "tailwindcss";
 
-html, body, #root { height: 100%; }
-body { margin: 0; }
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
 
 /* hide scrollbar but keep scrolling */
-html, body {
-  scrollbar-width: none;      /* Firefox */
-  -ms-overflow-style: none;   /* old Edge */
+html,
+body {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 html::-webkit-scrollbar,
@@ -14,19 +22,19 @@ body::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
+
 @layer base {
   :root {
-    /* базовые */
     --bg: 6 11 22;
     --fg: 255 255 255;
+    --card: 255 255 255;
+    --cardA: 0.04;
+    --borderA: 0.10;
+    --mutedA: 0.60;
 
-    /* surfaces */
-    --card: 255 255 255; /* tint для стекла */
-    --cardA: 0.04;       /* прозрачность карточки */
-    --borderA: 0.10;     /* прозрачность бордера */
-
-    /* опционально: “muted” для текста */
-    --mutedA: 0.60;      /* пример: rgba(var(--fg), --mutedA) */
+    /* outline только для светлой темы */
+    --outlineA: 0;
+    --outlineSoftA: 0;
   }
 
   html.theme-graphite {
@@ -36,64 +44,70 @@ body::-webkit-scrollbar {
     --cardA: 0.04;
     --borderA: 0.10;
     --mutedA: 0.60;
+
+    --outlineA: 0;
+    --outlineSoftA: 0;
   }
 
   html.theme-midnight {
     --bg: 3 7 18;
     --fg: 255 255 255;
-    --card: 99 102 241; /* чуть индиго */
+    --card: 99 102 241;
     --cardA: 0.10;
     --borderA: 0.18;
     --mutedA: 0.60;
+
+    --outlineA: 0;
+    --outlineSoftA: 0;
   }
 
   html.theme-snow {
     --bg: 247 248 251;
     --fg: 10 15 25;
-    --card: 10 15 25;   /* тёмный tint на светлом фоне */
+    --card: 10 15 25;
     --cardA: 0.04;
     --borderA: 0.10;
     --mutedA: 0.65;
+
+    /* только тут видна обводка */
+    --outlineA: 0.08;
+    --outlineSoftA: 0.04;
   }
 
-  html.reduce-motion * {
-    transition: none !important;
-    animation: none !important;
-    scroll-behavior: auto !important;
-  }
+html.reduce-motion * {
+  transition: none !important;
+  animation: none !important;
+  scroll-behavior: auto !important;
+}
 }
 
 /* =========================
    Hide scrollbars globally
    ========================= */
 
-/* Firefox */
 * {
   scrollbar-width: none;
-}
-
-/* IE/Edge legacy */
-* {
   -ms-overflow-style: none;
 }
 
-/* Chrome/Safari/Electron */
 *::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
 }
+
 *::-webkit-scrollbar-thumb {
   background: transparent !important;
 }
+
 *::-webkit-scrollbar-track {
   background: transparent !important;
 }
 
-/* Optional helper class (if you want explicit usage too) */
 .no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 .no-scrollbar::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
@@ -114,28 +128,23 @@ html.reduce-motion *::after {
    Settings: PERF toggles
 --------------------------- */
 
-/* 1) Disable backdrop blur (главный убийца FPS) */
 html.perf-no-blur * {
   backdrop-filter: none !important;
 }
 
-/* 2) Simplify shadows (убираем тяжелые огромные тени) */
 html.perf-soft-shadows .perf-shadow-heavy {
-  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.45) !important;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.18) !important;
 }
 
-/* 3) Disable row shine (рад. градиент на :after) */
 html.perf-no-rowshine [data-rowshine="1"]::after {
   opacity: 0 !important;
 }
 
-/* 4) Disable hover/effects while scrolling */
 html.perf-scroll-off [data-scrl-fx="1"],
 html.perf-scroll-off [data-scrl-fx="1"] * {
   transition: none !important;
 }
+
 html.perf-scroll-off [data-scrl-fx="1"]::after {
   opacity: 0 !important;
 }
-
-

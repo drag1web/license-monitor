@@ -7,6 +7,8 @@ type AuthCtx = {
   user: User | null;
   loading: boolean;
   login: (login: string, password: string) => Promise<void>;
+  register: (login: string, password: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -28,13 +30,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(r.user!);
   }
 
+  async function register(login: string, password: string) {
+    const r = await api.register(login, password);
+    if (!r.ok) throw new Error(r.error ?? "register failed");
+    setUser(r.user!);
+  }
+
+  async function changePassword(currentPassword: string, newPassword: string) {
+    const r = await api.changePassword(currentPassword, newPassword);
+    if (!r.ok) throw new Error(r.error ?? "change password failed");
+  }
+
   async function logout() {
     await api.logout();
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, changePassword, logout }}>
       {children}
     </AuthContext.Provider>
   );

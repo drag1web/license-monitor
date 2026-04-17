@@ -1,3 +1,0 @@
-product,product_key,license_type,demand,installs,users,licenses,delta,risk,expires_soon,nearest_end_date
-Adobe Photoshop CC,adobe photoshop cc,per_install,1,1,1,0,1,DEFICIT,NO,
-Microsoft Office Professional 2019,microsoft office professional 2019,per_user,2,2,2,120,-118,OK,NO,2027-12-31

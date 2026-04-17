@@ -164,7 +164,7 @@ export const download = {
  * Auth API (HTTP)
  * ------------------------------------------ */
 
-export type User = { id: number; login: string };
+export type User = { id: number; login: string; role: "admin" | "viewer" };
 
 export function me(): Promise<{ ok: boolean; user: User | null }> {
   return j("/api/auth/me");
@@ -174,6 +174,20 @@ export function login(login: string, password: string) {
   return j<{ ok: boolean; user?: User; error?: string }>("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ login, password }),
+  });
+}
+
+export function register(login: string, password: string) {
+  return j<{ ok: boolean; user?: User; error?: string }>("/api/auth/register", {
+    method: "POST",
+    body: JSON.stringify({ login, password }),
+  });
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return j<{ ok: boolean; error?: string }>("/api/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 }
 

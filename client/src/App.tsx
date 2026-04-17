@@ -13,7 +13,6 @@ import { useAuth } from "./auth/AuthContext";
 
 import { AppLayout } from "./AppLayout";
 import { PageHeader } from "./components/PageHeader";
-import { StatusBar } from "./components/StatusBar";
 import { Button } from "./ui/Button";
 
 function ProtectedShell({
@@ -34,8 +33,6 @@ function ProtectedShell({
 }
 
 function AuthedRoutes() {
-  const { user, logout } = useAuth();
-
   return (
     <AppLayout>
       <div className="max-w-6xl mx-auto px-6 py-6">
@@ -43,14 +40,7 @@ function AuthedRoutes() {
           <Route
             path="/"
             element={
-              <ProtectedShell
-                title="Dashboard"
-                right={
-                  <Button variant="ghost" size="sm" onClick={logout}>
-                    Выйти
-                  </Button>
-                }
-              >
+              <ProtectedShell title="Dashboard">
                 <Dashboard />
               </ProtectedShell>
             }
@@ -106,7 +96,6 @@ function AuthedRoutes() {
         </Routes>
       </div>
 
-      <StatusBar user={user ?? undefined} />
     </AppLayout>
   );
 }
