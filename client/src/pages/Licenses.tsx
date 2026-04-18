@@ -22,7 +22,7 @@ import {
 
 import type { Density, Mode, SortDir, SortKey } from "./licenses/types";
 import { S } from "./licenses/styles";
-import { cmp, nextDir, safeNum, statusTone, toneFromExpires } from "./licenses/utils";
+import { cmp, safeNum, statusTone, toneFromExpires } from "./licenses/utils";
 import { loadPinned, savePinned } from "./licenses/pinned";
 import { LicensesHero } from "./licenses/LicensesHero";
 import { BulkBar } from "./licenses/BulkBar";
@@ -69,6 +69,10 @@ function clearSavedFilters() {
   } catch {
     // ignore
   }
+}
+
+export function nextDir(d: "asc" | "desc" | null): "asc" | "desc" {
+  return d === "asc" ? "desc" : "asc";
 }
 
 export default function Licenses() {
@@ -596,15 +600,16 @@ export default function Licenses() {
   }, [isAdmin, toast, load]);
 
   const onToggleSort = useCallback((key: SortKey) => {
-    setSortKey((prevKey) => {
-      if (prevKey === key) {
-        setSortDir((d) => nextDir(d));
-        return prevKey;
-      }
-      setSortDir(key === "product" || key === "vendor" || key === "type" ? "asc" : "desc");
-      return key;
-    });
-  }, []);
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDir(
+      key === "product" || key === "vendor" || key === "type" ? "asc" : "desc"
+    );
+  }, [sortKey]);
 
   // Inline seats edit handlers
   const beginSeatsEdit = useCallback((row: LicenseRow) => {

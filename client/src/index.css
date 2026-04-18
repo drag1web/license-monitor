@@ -8,9 +8,21 @@ body,
 
 body {
   margin: 0;
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+  font-feature-settings:
+    "rlig" 1,
+    "calt" 1,
+    "ss01" 1;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* hide scrollbar but keep scrolling */
+/* ----------------------------------------
+   Scrollbars
+---------------------------------------- */
+
 html,
 body {
   scrollbar-width: none;
@@ -22,68 +34,6 @@ body::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
-
-@layer base {
-  :root {
-    --bg: 6 11 22;
-    --fg: 255 255 255;
-    --card: 255 255 255;
-    --cardA: 0.04;
-    --borderA: 0.10;
-    --mutedA: 0.60;
-
-    /* outline только для светлой темы */
-    --outlineA: 0;
-    --outlineSoftA: 0;
-  }
-
-  html.theme-graphite {
-    --bg: 6 11 22;
-    --fg: 255 255 255;
-    --card: 255 255 255;
-    --cardA: 0.04;
-    --borderA: 0.10;
-    --mutedA: 0.60;
-
-    --outlineA: 0;
-    --outlineSoftA: 0;
-  }
-
-  html.theme-midnight {
-    --bg: 3 7 18;
-    --fg: 255 255 255;
-    --card: 99 102 241;
-    --cardA: 0.10;
-    --borderA: 0.18;
-    --mutedA: 0.60;
-
-    --outlineA: 0;
-    --outlineSoftA: 0;
-  }
-
-  html.theme-snow {
-    --bg: 247 248 251;
-    --fg: 10 15 25;
-    --card: 10 15 25;
-    --cardA: 0.04;
-    --borderA: 0.10;
-    --mutedA: 0.65;
-
-    /* только тут видна обводка */
-    --outlineA: 0.08;
-    --outlineSoftA: 0.04;
-  }
-
-html.reduce-motion * {
-  transition: none !important;
-  animation: none !important;
-  scroll-behavior: auto !important;
-}
-}
-
-/* =========================
-   Hide scrollbars globally
-   ========================= */
 
 * {
   scrollbar-width: none;
@@ -113,20 +63,235 @@ html.reduce-motion * {
   height: 0 !important;
 }
 
-/* ---------------------------
-   Settings: reduce motion
---------------------------- */
-html.reduce-motion *,
-html.reduce-motion *::before,
-html.reduce-motion *::after {
-  animation: none !important;
-  transition: none !important;
-  scroll-behavior: auto !important;
+/* ----------------------------------------
+   Theme system (dark-only)
+---------------------------------------- */
+
+@layer base {
+  :root {
+    /* page */
+    --bg: 5 10 20;
+    --fg: 244 247 255;
+
+    /* muted text */
+    --muted: 155 168 192;
+    --mutedA: 0.60;
+
+    /* glass surfaces */
+    --card: 17 25 41;
+    --cardA: 0.48;
+    --cardSoftA: 0.28;
+    --cardStrongA: 0.68;
+
+    /* subtle borders / separators */
+    --line: 86 108 142;
+    --lineA: 0.18;
+    --lineSoftA: 0.10;
+    --lineStrongA: 0.26;
+
+    /* depth */
+    --shadow: 0 0 0;
+    --panelBlur: 18px;
+
+    /* accents */
+    --cyan: 34 211 238;
+    --indigo: 99 102 241;
+    --emerald: 16 185 129;
+    --amber: 245 158 11;
+    --rose: 244 63 94;
+
+    /* base page gradients */
+    --bgGlowA: 0.18;
+    --bgGridA: 0.045;
+  }
+
+  html.theme-graphite {
+    --bg: 5 10 20;
+    --fg: 244 247 255;
+
+    --muted: 155 168 192;
+    --mutedA: 0.60;
+
+    --card: 18 26 43;
+    --cardA: 0.46;
+    --cardSoftA: 0.24;
+    --cardStrongA: 0.64;
+
+    --line: 86 108 142;
+    --lineA: 0.16;
+    --lineSoftA: 0.09;
+    --lineStrongA: 0.24;
+
+    --shadow: 0 0 0;
+    --panelBlur: 18px;
+
+    --cyan: 34 211 238;
+    --indigo: 99 102 241;
+    --emerald: 16 185 129;
+    --amber: 245 158 11;
+    --rose: 244 63 94;
+
+    --bgGlowA: 0.16;
+    --bgGridA: 0.04;
+  }
+
+  html.theme-midnight {
+    --bg: 3 7 18;
+    --fg: 244 247 255;
+
+    --muted: 160 171 198;
+    --mutedA: 0.60;
+
+    --card: 20 24 56;
+    --cardA: 0.50;
+    --cardSoftA: 0.26;
+    --cardStrongA: 0.70;
+
+    --line: 92 108 160;
+    --lineA: 0.18;
+    --lineSoftA: 0.10;
+    --lineStrongA: 0.28;
+
+    --shadow: 0 0 0;
+    --panelBlur: 18px;
+
+    --cyan: 34 211 238;
+    --indigo: 129 140 248;
+    --emerald: 16 185 129;
+    --amber: 245 158 11;
+    --rose: 244 63 94;
+
+    --bgGlowA: 0.18;
+    --bgGridA: 0.045;
+  }
+
+  html,
+  body {
+    background:
+      radial-gradient(
+        1200px 600px at 20% -10%,
+        rgba(var(--cyan), 0.08),
+        transparent 60%
+      ),
+      radial-gradient(
+        900px 520px at 100% 0%,
+        rgba(var(--indigo), 0.08),
+        transparent 58%
+      ),
+      linear-gradient(
+        180deg,
+        rgba(var(--fg), 0.015),
+        transparent 24%
+      ),
+      rgb(var(--bg));
+    color: rgb(var(--fg));
+  }
+
+  html.reduce-motion *,
+  html.reduce-motion *::before,
+  html.reduce-motion *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }
 
-/* ---------------------------
-   Settings: PERF toggles
---------------------------- */
+/* ----------------------------------------
+   Selection / focus / defaults
+---------------------------------------- */
+
+::selection {
+  background: rgba(var(--cyan), 0.22);
+  color: rgb(var(--fg));
+}
+
+:focus-visible {
+  outline: none;
+}
+
+/* ----------------------------------------
+   App-wide helpers
+---------------------------------------- */
+
+@layer utilities {
+  .text-muted {
+    color: rgba(var(--fg), 0.56);
+  }
+
+  .text-soft {
+    color: rgba(var(--fg), 0.72);
+  }
+
+  .border-soft {
+    border-color: rgba(var(--line), var(--lineA));
+  }
+
+  .border-soft-strong {
+    border-color: rgba(var(--line), var(--lineStrongA));
+  }
+
+  .bg-glass {
+    background: rgba(var(--card), var(--cardA));
+  }
+
+  .bg-glass-soft {
+    background: rgba(var(--card), var(--cardSoftA));
+  }
+
+  .bg-glass-strong {
+    background: rgba(var(--card), var(--cardStrongA));
+  }
+
+  .bg-glass-gradient {
+    background:
+      linear-gradient(
+        to bottom,
+        rgba(var(--card), calc(var(--cardA) + 0.12)),
+        rgba(var(--card), calc(var(--cardA) - 0.10))
+      );
+  }
+
+  .shadow-soft-panel {
+    box-shadow:
+      0 20px 80px -40px rgba(0, 0, 0, 0.34),
+      0 14px 32px rgba(0, 0, 0, 0.18);
+  }
+
+  .shadow-heavy-panel {
+    box-shadow:
+      0 28px 100px -40px rgba(0, 0, 0, 0.42),
+      0 18px 36px rgba(0, 0, 0, 0.22);
+  }
+
+  .hairline-top {
+    position: relative;
+  }
+
+  .hairline-top::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(var(--cyan), 0.18),
+      transparent
+    );
+    pointer-events: none;
+  }
+
+  .glass-ring {
+    box-shadow:
+      inset 0 1px 0 rgba(var(--fg), 0.035),
+      0 14px 40px rgba(0, 0, 0, 0.22);
+  }
+}
+
+/* ----------------------------------------
+   Performance toggles
+---------------------------------------- */
 
 html.perf-no-blur * {
   backdrop-filter: none !important;

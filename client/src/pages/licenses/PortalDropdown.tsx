@@ -10,21 +10,26 @@ function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
 
-function useOutsidePointerDown(open: boolean, onClose: () => void) {
-  const ref = useRef<HTMLDivElement | null>(null);
-
+function useOutsidePointerDown(
+  open: boolean,
+  onClose: () => void,
+  panelRef: React.RefObject<HTMLDivElement | null>
+) {
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      const root = ref.current;
-      if (!root) return;
-      if (e.target instanceof Node && !root.contains(e.target)) onClose();
-    };
-    window.addEventListener("pointerdown", onDown, { capture: true });
-    return () => window.removeEventListener("pointerdown", onDown, { capture: true } as any);
-  }, [open, onClose]);
 
-  return ref;
+    const onDown = (e: PointerEvent) => {
+      const panel = panelRef.current;
+      if (!panel) return;
+
+      if (e.target instanceof Node && !panel.contains(e.target)) {
+        onClose();
+      }
+    };
+
+    window.addEventListener("pointerdown", onDown, true);
+    return () => window.removeEventListener("pointerdown", onDown, true);
+  }, [open, onClose, panelRef]);
 }
 
 function useEsc(open: boolean, onClose: () => void) {
@@ -51,10 +56,12 @@ export function PortalDropdown({
   width?: number;
   children: React.ReactNode;
 }) {
-  const rootRef = useOutsidePointerDown(open, onClose);
-  useEsc(open, onClose);
 
   const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useOutsidePointerDown(open, onClose, panelRef);
+  useEsc(open, onClose);
+
   const [pos, setPos] = useState({ x: 0, y: 0 });
 
   const compute = useCallback(() => {
@@ -95,7 +102,7 @@ export function PortalDropdown({
   if (!open) return null;
 
   return (
-    <div ref={rootRef} className="fixed inset-0 z-[9999]">
+    <div className="fixed inset-0 z-[9999]">
       <div className="absolute inset-0" aria-hidden />
       <div
         ref={(el) => {

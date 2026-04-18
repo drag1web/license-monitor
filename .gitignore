@@ -17,3 +17,14 @@ data/report.csv
 data/runs.csv
 data/unmatched.csv
 data/bad_rows.csv
+# database
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# reports
+data/*.csv
+data/*.xlsx
+git rm --cached -r ../data
+# logs
+*.log

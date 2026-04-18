@@ -45,6 +45,10 @@ import {
   TimerReset,
   HardDrive,
   Skull,
+  History,
+  ArrowUpRight,
+  Activity,
+  Sparkles,
 } from "lucide-react";
 
 /* ------------------------------------------
@@ -109,20 +113,20 @@ async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 /* ------------------------------------------
- * Menu UI bits
+ * Small UI bits
  * ------------------------------------------ */
 
 function MenuSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <>
-      <div className="px-3 pt-3 pb-2 text-[11px] text-white/45">{title}</div>
+      <div className="px-3 pt-3 pb-2 text-[11px] text-[rgba(var(--fg),0.45)]">{title}</div>
       {children}
     </>
   );
 }
 
 function MenuDivider() {
-  return <div className="h-px bg-white/10" />;
+  return <div className="h-px bg-[rgba(100,130,170,0.14)]" />;
 }
 
 function MenuItem({
@@ -148,7 +152,7 @@ function MenuItem({
     "w-full text-left px-3 py-2",
     "flex items-center gap-2 text-sm",
     "transition-colors",
-    disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-white/5"
+    disabled ? "opacity-50 cursor-not-allowed" : "hover:bg-[rgba(var(--card),0.18)]"
   );
 
   const titleCls =
@@ -156,7 +160,7 @@ function MenuItem({
       ? "text-rose-100"
       : tone === "warn"
         ? "text-amber-100"
-        : "text-white/90";
+        : "text-[rgba(var(--fg),0.90)]";
 
   if (href) {
     return (
@@ -172,9 +176,9 @@ function MenuItem({
         {icon}
         <div className="min-w-0">
           <div className={cn("font-semibold", titleCls)}>{title}</div>
-          {description && <div className="text-[11px] text-white/45">{description}</div>}
+          {description && <div className="text-[11px] text-[rgba(var(--fg),0.45)]">{description}</div>}
         </div>
-        {right && <div className="ml-auto text-[11px] text-white/40">{right}</div>}
+        {right && <div className="ml-auto text-[11px] text-[rgba(var(--fg),0.40)]">{right}</div>}
       </a>
     );
   }
@@ -192,10 +196,42 @@ function MenuItem({
       {icon}
       <div className="min-w-0">
         <div className={cn("font-semibold", titleCls)}>{title}</div>
-        {description && <div className="text-[11px] text-white/45">{description}</div>}
+        {description && <div className="text-[11px] text-[rgba(var(--fg),0.45)]">{description}</div>}
       </div>
-      {right && <div className="ml-auto text-[11px] text-white/40">{right}</div>}
+      {right && <div className="ml-auto text-[11px] text-[rgba(var(--fg),0.40)]">{right}</div>}
     </button>
+  );
+}
+
+function SummaryChip({
+  label,
+  value,
+  tone = "none",
+}: {
+  label: string;
+  value: React.ReactNode;
+  tone?: "none" | "ok" | "warn" | "bad";
+}) {
+  const cls =
+    tone === "bad"
+      ? "bg-rose-500/10 text-rose-100"
+      : tone === "warn"
+        ? "bg-amber-500/10 text-amber-100"
+        : tone === "ok"
+          ? "bg-emerald-500/10 text-emerald-100"
+          : "bg-[rgba(var(--card),0.22)] text-[rgba(var(--fg),0.74)]";
+
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border px-4 py-3",
+        "border-[rgba(100,130,170,0.14)]",
+        cls
+      )}
+    >
+      <div className="text-[11px] opacity-80">{label}</div>
+      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+    </div>
   );
 }
 
@@ -283,6 +319,22 @@ export default function Runs() {
     for (const r of visible) if (!selected.has(r.id)) return false;
     return true;
   }, [visible, selected]);
+
+  const totalProducts = useMemo(() => {
+    return last?.total_products ?? 0;
+  }, [last]);
+
+  const totalDeficit = useMemo(() => {
+    return last?.deficit_products ?? 0;
+  }, [last]);
+
+  const totalExpiring = useMemo(() => {
+    return last?.expiring_products ?? 0;
+  }, [last]);
+
+  const totalUnmatched = useMemo(() => {
+    return last?.unmatched_installs ?? 0;
+  }, [last]);
 
   const startSelectMode = useCallback(() => {
     if (!isAdmin) return;
@@ -484,7 +536,7 @@ export default function Runs() {
   }, [isAdmin, confirm, refresh]);
 
   return (
-    <Card className="p-5">
+    <div className="space-y-6">
       <ConfirmDialog
         open={confirm.open}
         title={confirm.cfg.title}
@@ -501,417 +553,532 @@ export default function Runs() {
       />
 
       {!isAdmin && (
-        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-          <div className="text-sm font-semibold text-white/85">Режим просмотра</div>
-          <div className="mt-1 text-xs text-white/55">
+        <div className="rounded-2xl bg-[rgba(var(--card),0.20)] px-4 py-3">
+          <div className="text-sm font-semibold text-[rgba(var(--fg),0.86)]">Режим просмотра</div>
+          <div className="mt-1 text-xs text-[rgba(var(--fg),0.56)]">
             У вас нет прав на удаление и очистку истории запусков.
           </div>
         </div>
       )}
 
-      <div className="flex items-end justify-between mb-4 gap-3">
-        <div className="min-w-0">
-          <div className="text-xs text-white/55">История</div>
-          <h3 className="text-xl font-semibold text-white/90 tracking-[0.01em]">Запуски</h3>
-        </div>
+      {/* HERO */}
+      <Card
+        className={cn(
+          "relative overflow-hidden rounded-3xl p-5 md:p-6",
+          "bg-[linear-gradient(to_bottom,rgba(var(--bg),0.74),rgba(var(--bg),0.36))]",
+          "shadow-[0_24px_80px_rgba(0,0,0,0.34)]"
+        )}
+      >
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/16 to-transparent" />
+        <div className="pointer-events-none absolute -left-20 -top-20 h-72 w-72 rounded-full bg-cyan-500/8 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 bottom-0 h-72 w-72 rounded-full bg-indigo-500/8 blur-3xl" />
 
-        <div className="flex items-center gap-2">
-          <div className="text-xs text-white/45">{loading ? "…" : `Всего: ${runs.length}`}</div>
+        <div className="relative space-y-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex min-w-0 flex-1 items-start gap-4">
+              <div className="grid h-14 w-14 shrink-0 place-items-center rounded-3xl bg-[rgba(var(--fg),0.04)] shadow-[0_18px_70px_rgba(34,211,238,0.08)]">
+                <History className="h-7 w-7 text-cyan-300/85" />
+              </div>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={refresh}
-            disabled={refreshBusy || busy}
-            className="px-2"
-            title="Refresh"
-          >
-            <RefreshCw className={cn("h-4 w-4", refreshBusy && "animate-spin")} />
-          </Button>
-
-          <span ref={menuAnchorRef} className="inline-flex">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setMenuOpen((v) => !v)}
-              className="px-2"
-              title="Options"
-              disabled={busy}
-            >
-              <Menu className="h-4 w-4" />
-            </Button>
-          </span>
-
-          <Dropdown
-            open={menuOpen}
-            onClose={() => setMenuOpen(false)}
-            anchorRef={menuAnchorRef as any}
-            width={340}
-            align="end"
-            sideOffset={10}
-          >
-            <MenuSection title="Actions">
-              {isAdmin && (
-                <MenuItem
-                  icon={<Trash2 className="h-4 w-4 text-rose-200/90" />}
-                  title="Delete runs…"
-                  description="Включить режим выбора"
-                  right={runs.length}
-                  disabled={busy}
-                  onClick={startSelectMode}
-                />
-              )}
-
-              <MenuItem
-                icon={
-                  <RefreshCw
-                    className={cn("h-4 w-4 text-cyan-200/80", refreshBusy && "animate-spin")}
-                  />
-                }
-                title="Refresh"
-                description="Перезагрузить список запусков"
-                disabled={refreshBusy || busy}
-                onClick={async () => {
-                  setMenuOpen(false);
-                  await refresh();
-                }}
-              />
-
-              <MenuItem
-                icon={<DownloadIcon className="h-4 w-4 text-cyan-200/80" />}
-                title="Export runs.csv"
-                description="Скачать историю запусков"
-                href={download.runsCsv}
-                disabled={busy}
-                onClick={() => setMenuOpen(false)}
-              />
-
-              <MenuItem
-                icon={<Copy className="h-4 w-4 text-cyan-200/80" />}
-                title="Copy last run id"
-                description={`Быстро скопировать #${last?.id ?? "—"}`}
-                disabled={!last || busy}
-                onClick={async () => {
-                  setMenuOpen(false);
-                  await onCopyLastId();
-                }}
-              />
-            </MenuSection>
-
-            {isAdmin && (
-              <>
-                <MenuDivider />
-
-                <MenuSection title="Selection tools">
-                  <MenuItem
-                    icon={<CalendarClock className="h-4 w-4 text-white/65" />}
-                    title="Select last 10"
-                    description="Из видимых 50"
-                    disabled={busy}
-                    onClick={() => withSelection(() => selectLastN(10))}
-                  />
-
-                  <MenuItem
-                    icon={<ShieldAlert className="h-4 w-4 text-amber-200/80" />}
-                    title="Select risky only"
-                    description="deficit/expiring/unmatched"
-                    right={riskyCount}
-                    disabled={busy}
-                    onClick={() => withSelection(selectRiskyOnly)}
-                    tone="warn"
-                  />
-
-                  <MenuItem
-                    icon={<Layers className="h-4 w-4 text-white/65" />}
-                    title="Invert selection"
-                    description="В пределах видимых 50"
-                    disabled={busy}
-                    onClick={() => withSelection(invertSelection)}
-                  />
-
-                  <MenuItem
-                    icon={<Minus className="h-4 w-4 text-white/65" />}
-                    title="Clear selection"
-                    description="Снять всё"
-                    disabled={busy}
-                    onClick={() => withSelection(clearSelection)}
-                  />
-                </MenuSection>
-
-                <MenuDivider />
-
-                <MenuSection title="Retention">
-                  <MenuItem
-                    icon={<TimerReset className="h-4 w-4 text-amber-200/80" />}
-                    title="Delete older than 30 days"
-                    description="Очистка по возрасту"
-                    disabled={busy}
-                    onClick={() => doOlderThan(30)}
-                    tone="warn"
-                  />
-                  <MenuItem
-                    icon={<TimerReset className="h-4 w-4 text-amber-200/80" />}
-                    title="Delete older than 90 days"
-                    description="Очистка по возрасту"
-                    disabled={busy}
-                    onClick={() => doOlderThan(90)}
-                    tone="warn"
-                  />
-
-                  <MenuDivider />
-
-                  <MenuItem
-                    icon={<HardDrive className="h-4 w-4 text-rose-200/90" />}
-                    title="Keep only last 50"
-                    description="Потребует ввод KEEP_LAST_50"
-                    disabled={busy}
-                    onClick={() => doKeepLast(50)}
-                    tone="danger"
-                  />
-                  <MenuItem
-                    icon={<HardDrive className="h-4 w-4 text-rose-200/90" />}
-                    title="Keep only last 200"
-                    description="Потребует ввод KEEP_LAST_200"
-                    disabled={busy}
-                    onClick={() => doKeepLast(200)}
-                    tone="danger"
-                  />
-
-                  <MenuDivider />
-
-                  <MenuItem
-                    icon={<Skull className="h-4 w-4 text-rose-200/90" />}
-                    title="Delete ALL runs"
-                    description="Потребует ввод DELETE_ALL"
-                    disabled={busy}
-                    onClick={doDeleteAll}
-                    tone="danger"
-                  />
-                </MenuSection>
-              </>
-            )}
-
-            <MenuDivider />
-
-            <MenuItem
-              icon={<X className="h-4 w-4 text-white/60" />}
-              title="Close"
-              disabled={busy}
-              onClick={() => setMenuOpen(false)}
-            />
-          </Dropdown>
-        </div>
-      </div>
-
-      {err && (
-        <div className="mb-4 rounded-2xl border border-rose-400/15 bg-rose-500/10 px-4 py-3">
-          <div className="text-sm font-semibold text-rose-100">Ошибка</div>
-          <div className="mt-1 text-xs text-rose-200/80 break-words">{err}</div>
-        </div>
-      )}
-
-      <Table>
-        <TableCaption
-          title="Запуски"
-          description="Сводка по последним проверкам и результатам сопоставления."
-          right={
-            isAdmin && selectMode ? (
-              <div className="flex items-center gap-2">
-                <div className="text-[11px] text-white/45">
-                  Selected: <span className="text-white/80">{selected.size}</span>
+              <div className="min-w-0">
+                <div className="text-xs tracking-wide text-[rgba(var(--fg),0.46)]">
+                  История
                 </div>
 
-                <Button
-                  variant="danger"
-                  size="sm"
-                  disabled={busy || selected.size === 0}
-                  onClick={deleteSelected}
-                  className="min-w-[160px] justify-center"
-                  title={selected.size === 0 ? "Nothing selected" : "Delete selected"}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  {busy ? "Deleting…" : "Delete selected"}
-                </Button>
+                <div className="mt-1 text-3xl font-semibold tracking-tight text-[rgb(var(--fg))]">
+                  Запуски
+                </div>
 
+                <div className="mt-2 max-w-[72ch] text-sm leading-relaxed text-[rgba(var(--fg),0.58)]">
+                  История прогонов, результаты сопоставления и быстрые действия по очистке.
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-2xl bg-[rgba(var(--card),0.22)] px-3 py-1.5 text-[12px] font-semibold text-[rgba(var(--fg),0.76)]">
+                    <Sparkles className="h-4 w-4 opacity-80" />
+                    History registry
+                  </span>
+
+                  {last && (
+                    <span className="inline-flex items-center gap-2 text-[12px] text-[rgba(var(--fg),0.46)]">
+                      <CalendarClock className="h-4 w-4" />
+                      <span>Последний запуск: #{last.id}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={refresh}
+                disabled={refreshBusy || busy}
+                title="Refresh"
+              >
+                <RefreshCw className={cn("h-4 w-4", refreshBusy && "animate-spin")} />
+                Refresh
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  if (!last) return;
+                  await onCopyLastId();
+                }}
+                disabled={!last || busy}
+                title="Copy last run id"
+              >
+                <Copy className="h-4 w-4" />
+                Copy last id
+              </Button>
+
+              <a
+                href={download.runsCsv}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold",
+                  "border border-[rgba(100,130,170,0.16)] bg-[rgba(var(--card),0.22)]",
+                  "text-[rgba(var(--fg),0.86)] hover:bg-[rgba(var(--card),0.34)]",
+                  "transition"
+                )}
+              >
+                <DownloadIcon className="h-4 w-4" />
+                Export runs.csv
+              </a>
+
+              <span ref={menuAnchorRef} className="inline-flex">
                 <Button
                   variant="ghost"
                   size="sm"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  title="Options"
                   disabled={busy}
-                  onClick={cancelSelectMode}
-                  title="Cancel selection mode"
                 >
-                  <X className="h-4 w-4" />
-                  Cancel
+                  <Menu className="h-4 w-4" />
+                  Actions
                 </Button>
-              </div>
-            ) : (
-              <div className="text-[11px] text-white/45">Последние 50</div>
-            )
-          }
-        />
+              </span>
 
-        {loading ? (
-          <TableSkeleton rows={6} cols={isAdmin && selectMode ? 7 : 6} />
-        ) : visible.length === 0 ? (
-          <TableEmpty
-            title="Пока нет запусков"
-            description={
-              isAdmin
-                ? "Запусти проверку лицензий — и тут появится история."
-                : "История запусков пока пуста."
-            }
-          />
-        ) : (
-          <TableScroll className="max-h-[60vh]">
-            <TableInner stickyHeader density="comfortable">
-              <THead>
-                <tr>
-                  {isAdmin && selectMode && (
-                    <th className="px-3 py-2 text-left">
-                      <button
-                        onClick={toggleAllVisible}
-                        className={cn(
-                          "inline-flex items-center gap-2",
-                          "text-xs text-white/60 hover:text-white/80 transition-colors"
-                        )}
-                        title={allVisibleSelected ? "Unselect all" : "Select all (visible)"}
-                        type="button"
-                      >
-                        {allVisibleSelected ? (
-                          <CheckSquare className="h-4 w-4" />
-                        ) : (
-                          <Square className="h-4 w-4" />
-                        )}
-                        <span className="hidden sm:inline">all</span>
-                      </button>
-                    </th>
+              <Dropdown
+                open={menuOpen}
+                onClose={() => setMenuOpen(false)}
+                anchorRef={menuAnchorRef as any}
+                width={340}
+                align="end"
+                sideOffset={10}
+              >
+                <MenuSection title="Actions">
+                  {isAdmin && (
+                    <MenuItem
+                      icon={<Trash2 className="h-4 w-4 text-rose-200/90" />}
+                      title="Delete runs…"
+                      description="Включить режим выбора"
+                      right={runs.length}
+                      disabled={busy}
+                      onClick={startSelectMode}
+                    />
                   )}
 
-                  <SortTh
-                    label="id"
-                    dir={sortKey === "id" ? sortDir : null}
-                    onToggle={() => toggleSort("id", "asc")}
-                    hint="Sort by id"
+                  <MenuItem
+                    icon={
+                      <RefreshCw
+                        className={cn("h-4 w-4 text-cyan-200/80", refreshBusy && "animate-spin")}
+                      />
+                    }
+                    title="Refresh"
+                    description="Перезагрузить список запусков"
+                    disabled={refreshBusy || busy}
+                    onClick={async () => {
+                      setMenuOpen(false);
+                      await refresh();
+                    }}
                   />
-                  <SortTh
-                    label="run_at"
-                    dir={sortKey === "run_at" ? sortDir : null}
-                    onToggle={() => toggleSort("run_at", "desc")}
-                    hint="Sort by run time"
-                  />
-                  <SortTh
-                    label="products"
-                    dir={sortKey === "total_products" ? sortDir : null}
-                    onToggle={() => toggleSort("total_products", "desc")}
-                    hint="Sort by total products"
-                  />
-                  <SortTh
-                    label="deficit"
-                    dir={sortKey === "deficit_products" ? sortDir : null}
-                    onToggle={() => toggleSort("deficit_products", "desc")}
-                    hint="Sort by deficits"
-                  />
-                  <SortTh
-                    label="expiring"
-                    dir={sortKey === "expiring_products" ? sortDir : null}
-                    onToggle={() => toggleSort("expiring_products", "desc")}
-                    hint="Sort by expiring"
-                  />
-                  <SortTh
-                    label="unmatched"
-                    dir={sortKey === "unmatched_installs" ? sortDir : null}
-                    onToggle={() => toggleSort("unmatched_installs", "desc")}
-                    hint="Sort by unmatched installs"
-                  />
-                </tr>
-              </THead>
 
-              <TBody>
-                {visible.map((r) => {
-                  const checked = selected.has(r.id);
-                  const risky = isRiskyRun(r);
+                  <MenuItem
+                    icon={<DownloadIcon className="h-4 w-4 text-cyan-200/80" />}
+                    title="Export runs.csv"
+                    description="Скачать историю запусков"
+                    href={download.runsCsv}
+                    disabled={busy}
+                    onClick={() => setMenuOpen(false)}
+                  />
 
-                  return (
-                    <Tr
-                      key={r.id}
-                      className={cn(
-                        isAdmin && selectMode && checked && "bg-white/[0.03]",
-                        risky && "border-l-2 border-amber-300/25"
-                      )}
-                    >
-                      {isAdmin && selectMode && (
-                        <Td>
-                          <button
-                            onClick={() => toggleOne(r.id)}
-                            className={cn(
-                              "inline-flex items-center justify-center",
-                              "h-8 w-8 rounded-xl",
-                              "hover:bg-white/5 transition-colors"
-                            )}
-                            title={checked ? "Unselect" : "Select"}
-                            type="button"
-                          >
-                            {checked ? (
-                              <CheckSquare className="h-4 w-4 text-cyan-200" />
-                            ) : (
-                              <Square className="h-4 w-4 text-white/50" />
-                            )}
-                          </button>
-                        </Td>
-                      )}
+                  <MenuItem
+                    icon={<Copy className="h-4 w-4 text-cyan-200/80" />}
+                    title="Copy last run id"
+                    description={`Быстро скопировать #${last?.id ?? "—"}`}
+                    disabled={!last || busy}
+                    onClick={async () => {
+                      setMenuOpen(false);
+                      await onCopyLastId();
+                    }}
+                  />
+                </MenuSection>
 
-                      <Td>
-                        <Link
+                {isAdmin && (
+                  <>
+                    <MenuDivider />
+
+                    <MenuSection title="Selection tools">
+                      <MenuItem
+                        icon={<CalendarClock className="h-4 w-4 text-[rgba(var(--fg),0.65)]" />}
+                        title="Select last 10"
+                        description="Из видимых 50"
+                        disabled={busy}
+                        onClick={() => withSelection(() => selectLastN(10))}
+                      />
+
+                      <MenuItem
+                        icon={<ShieldAlert className="h-4 w-4 text-amber-200/80" />}
+                        title="Select risky only"
+                        description="deficit/expiring/unmatched"
+                        right={riskyCount}
+                        disabled={busy}
+                        onClick={() => withSelection(selectRiskyOnly)}
+                        tone="warn"
+                      />
+
+                      <MenuItem
+                        icon={<Layers className="h-4 w-4 text-[rgba(var(--fg),0.65)]" />}
+                        title="Invert selection"
+                        description="В пределах видимых 50"
+                        disabled={busy}
+                        onClick={() => withSelection(invertSelection)}
+                      />
+
+                      <MenuItem
+                        icon={<Minus className="h-4 w-4 text-[rgba(var(--fg),0.65)]" />}
+                        title="Clear selection"
+                        description="Снять всё"
+                        disabled={busy}
+                        onClick={() => withSelection(clearSelection)}
+                      />
+                    </MenuSection>
+
+                    <MenuDivider />
+
+                    <MenuSection title="Retention">
+                      <MenuItem
+                        icon={<TimerReset className="h-4 w-4 text-amber-200/80" />}
+                        title="Delete older than 30 days"
+                        description="Очистка по возрасту"
+                        disabled={busy}
+                        onClick={() => doOlderThan(30)}
+                        tone="warn"
+                      />
+
+                      <MenuItem
+                        icon={<TimerReset className="h-4 w-4 text-amber-200/80" />}
+                        title="Delete older than 90 days"
+                        description="Очистка по возрасту"
+                        disabled={busy}
+                        onClick={() => doOlderThan(90)}
+                        tone="warn"
+                      />
+
+                      <MenuDivider />
+
+                      <MenuItem
+                        icon={<HardDrive className="h-4 w-4 text-rose-200/90" />}
+                        title="Keep only last 50"
+                        description="Потребует ввод KEEP_LAST_50"
+                        disabled={busy}
+                        onClick={() => doKeepLast(50)}
+                        tone="danger"
+                      />
+
+                      <MenuItem
+                        icon={<HardDrive className="h-4 w-4 text-rose-200/90" />}
+                        title="Keep only last 200"
+                        description="Потребует ввод KEEP_LAST_200"
+                        disabled={busy}
+                        onClick={() => doKeepLast(200)}
+                        tone="danger"
+                      />
+
+                      <MenuDivider />
+
+                      <MenuItem
+                        icon={<Skull className="h-4 w-4 text-rose-200/90" />}
+                        title="Delete ALL runs"
+                        description="Потребует ввод DELETE_ALL"
+                        disabled={busy}
+                        onClick={doDeleteAll}
+                        tone="danger"
+                      />
+                    </MenuSection>
+                  </>
+                )}
+
+                <MenuDivider />
+
+                <MenuItem
+                  icon={<X className="h-4 w-4 text-[rgba(var(--fg),0.60)]" />}
+                  title="Close"
+                  disabled={busy}
+                  onClick={() => setMenuOpen(false)}
+                />
+              </Dropdown>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <SummaryChip label="Всего запусков" value={runs.length} tone="none" />
+            <SummaryChip label="Risky runs" value={riskyCount} tone={riskyCount ? "warn" : "ok"} />
+            <SummaryChip label="Products" value={totalProducts} tone="none" />
+            <SummaryChip label="Deficit" value={totalDeficit} tone={totalDeficit ? "bad" : "ok"} />
+            <SummaryChip label="Expiring / Unmatched" value={`${totalExpiring}/${totalUnmatched}`} tone={totalExpiring || totalUnmatched ? "warn" : "ok"} />
+          </div>
+
+          {last && (
+            <div className="rounded-2xl bg-[rgba(var(--card),0.18)] px-4 py-3">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <div className="text-[11px] text-[rgba(var(--fg),0.46)]">Latest run</div>
+                  <div className="mt-1 text-sm font-semibold text-[rgba(var(--fg),0.86)]">
+                    #{last.id} • {last.run_at}
+                  </div>
+                </div>
+
+                <Link
+                  to={`/runs/${last.id}`}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-semibold",
+                    "border border-[rgba(100,130,170,0.16)] bg-[rgba(var(--card),0.24)]",
+                    "text-[rgba(var(--fg),0.86)] hover:bg-[rgba(var(--card),0.36)]",
+                    "transition"
+                  )}
+                >
+                  Open latest
+                  <ArrowUpRight className="h-4 w-4 text-[rgba(var(--fg),0.46)]" />
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {err && (
+        <div className="rounded-2xl border border-rose-400/15 bg-rose-500/10 px-4 py-3">
+          <div className="text-sm font-semibold text-rose-100">Ошибка</div>
+          <div className="mt-1 break-words text-xs text-rose-200/80">{err}</div>
+        </div>
+      )}
+
+      {/* TABLE */}
+      <Card
+        className={cn(
+          "rounded-3xl overflow-hidden p-0",
+          "bg-[linear-gradient(to_bottom,rgba(var(--bg),0.70),rgba(var(--bg),0.34))]",
+          "shadow-[0_24px_80px_rgba(0,0,0,0.32)]"
+        )}
+      >
+        <Table>
+          <TableCaption
+            title="Запуски"
+            description="Сводка по последним проверкам и результатам сопоставления."
+            right={
+              isAdmin && selectMode ? (
+                <div className="flex items-center gap-2">
+                  <div className="text-[11px] text-[rgba(var(--fg),0.45)]">
+                    Selected: <span className="text-[rgba(var(--fg),0.80)]">{selected.size}</span>
+                  </div>
+
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={busy || selected.size === 0}
+                    onClick={deleteSelected}
+                    className="min-w-[160px] justify-center"
+                    title={selected.size === 0 ? "Nothing selected" : "Delete selected"}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {busy ? "Deleting…" : "Delete selected"}
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={cancelSelectMode}
+                    title="Cancel selection mode"
+                  >
+                    <X className="h-4 w-4" />
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="text-[11px] text-[rgba(var(--fg),0.45)]">Последние 50</div>
+              )
+            }
+          />
+
+          {loading ? (
+            <TableSkeleton rows={6} cols={isAdmin && selectMode ? 7 : 6} />
+          ) : visible.length === 0 ? (
+            <TableEmpty
+              title="Пока нет запусков"
+              description={
+                isAdmin
+                  ? "Запусти проверку лицензий — и тут появится история."
+                  : "История запусков пока пуста."
+              }
+            />
+          ) : (
+            <TableScroll className="max-h-[60vh]">
+              <TableInner stickyHeader density="comfortable">
+                <THead>
+                  <tr>
+                    {isAdmin && selectMode && (
+                      <th className="px-3 py-2 text-left">
+                        <button
+                          onClick={toggleAllVisible}
                           className={cn(
                             "inline-flex items-center gap-2",
-                            "text-cyan-200/90 hover:text-cyan-200",
-                            "hover:underline underline-offset-4",
-                            "font-semibold"
+                            "text-xs text-[rgba(var(--fg),0.60)] hover:text-[rgba(var(--fg),0.82)] transition-colors"
                           )}
-                          to={`/runs/${r.id}`}
+                          title={allVisibleSelected ? "Unselect all" : "Select all (visible)"}
+                          type="button"
                         >
-                          #{r.id}
-                          <span className="text-[11px] font-normal text-white/35">Детали</span>
-                        </Link>
-                      </Td>
+                          {allVisibleSelected ? (
+                            <CheckSquare className="h-4 w-4" />
+                          ) : (
+                            <Square className="h-4 w-4" />
+                          )}
+                          <span className="hidden sm:inline">all</span>
+                        </button>
+                      </th>
+                    )}
 
-                      <Td className="text-white/70">{r.run_at}</Td>
-                      <Td className="tabular-nums">{r.total_products}</Td>
+                    <SortTh
+                      label="id"
+                      dir={sortKey === "id" ? sortDir : null}
+                      onToggle={() => toggleSort("id", "asc")}
+                      hint="Sort by id"
+                    />
+                    <SortTh
+                      label="run_at"
+                      dir={sortKey === "run_at" ? sortDir : null}
+                      onToggle={() => toggleSort("run_at", "desc")}
+                      hint="Sort by run time"
+                    />
+                    <SortTh
+                      label="products"
+                      dir={sortKey === "total_products" ? sortDir : null}
+                      onToggle={() => toggleSort("total_products", "desc")}
+                      hint="Sort by total products"
+                    />
+                    <SortTh
+                      label="deficit"
+                      dir={sortKey === "deficit_products" ? sortDir : null}
+                      onToggle={() => toggleSort("deficit_products", "desc")}
+                      hint="Sort by deficits"
+                    />
+                    <SortTh
+                      label="expiring"
+                      dir={sortKey === "expiring_products" ? sortDir : null}
+                      onToggle={() => toggleSort("expiring_products", "desc")}
+                      hint="Sort by expiring"
+                    />
+                    <SortTh
+                      label="unmatched"
+                      dir={sortKey === "unmatched_installs" ? sortDir : null}
+                      onToggle={() => toggleSort("unmatched_installs", "desc")}
+                      hint="Sort by unmatched installs"
+                    />
+                  </tr>
+                </THead>
 
-                      <Td
+                <TBody>
+                  {visible.map((r) => {
+                    const checked = selected.has(r.id);
+                    const risky = isRiskyRun(r);
+
+                    return (
+                      <Tr
+                        key={r.id}
                         className={cn(
-                          "tabular-nums",
-                          r.deficit_products ? "text-rose-200" : "text-white/75"
+                          isAdmin && selectMode && checked && "bg-[rgba(var(--card),0.14)]",
+                          risky && "border-l-2 border-amber-300/25"
                         )}
                       >
-                        {r.deficit_products}
-                      </Td>
-
-                      <Td
-                        className={cn(
-                          "tabular-nums",
-                          r.expiring_products ? "text-amber-200" : "text-white/75"
+                        {isAdmin && selectMode && (
+                          <Td>
+                            <button
+                              onClick={() => toggleOne(r.id)}
+                              className={cn(
+                                "inline-flex items-center justify-center",
+                                "h-8 w-8 rounded-xl",
+                                "hover:bg-[rgba(var(--card),0.20)] transition-colors"
+                              )}
+                              title={checked ? "Unselect" : "Select"}
+                              type="button"
+                            >
+                              {checked ? (
+                                <CheckSquare className="h-4 w-4 text-cyan-200" />
+                              ) : (
+                                <Square className="h-4 w-4 text-[rgba(var(--fg),0.50)]" />
+                              )}
+                            </button>
+                          </Td>
                         )}
-                      >
-                        {r.expiring_products}
-                      </Td>
 
-                      <Td
-                        className={cn(
-                          "tabular-nums",
-                          r.unmatched_installs ? "text-amber-200" : "text-white/75"
-                        )}
-                      >
-                        {r.unmatched_installs}
-                      </Td>
-                    </Tr>
-                  );
-                })}
-              </TBody>
-            </TableInner>
-          </TableScroll>
-        )}
-      </Table>
-    </Card>
+                        <Td>
+                          <Link
+                            className={cn(
+                              "inline-flex items-center gap-2",
+                              "font-semibold text-cyan-200/90 hover:text-cyan-200",
+                              "hover:underline underline-offset-4"
+                            )}
+                            to={`/runs/${r.id}`}
+                          >
+                            #{r.id}
+                            <span className="text-[11px] font-normal text-[rgba(var(--fg),0.35)]">Детали</span>
+                          </Link>
+                        </Td>
+
+                        <Td className="text-[rgba(var(--fg),0.70)]">{r.run_at}</Td>
+                        <Td className="tabular-nums">{r.total_products}</Td>
+
+                        <Td
+                          className={cn(
+                            "tabular-nums",
+                            r.deficit_products ? "text-rose-200" : "text-[rgba(var(--fg),0.74)]"
+                          )}
+                        >
+                          {r.deficit_products}
+                        </Td>
+
+                        <Td
+                          className={cn(
+                            "tabular-nums",
+                            r.expiring_products ? "text-amber-200" : "text-[rgba(var(--fg),0.74)]"
+                          )}
+                        >
+                          {r.expiring_products}
+                        </Td>
+
+                        <Td
+                          className={cn(
+                            "tabular-nums",
+                            r.unmatched_installs ? "text-amber-200" : "text-[rgba(var(--fg),0.74)]"
+                          )}
+                        >
+                          {r.unmatched_installs}
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </TBody>
+              </TableInner>
+            </TableScroll>
+          )}
+        </Table>
+      </Card>
+    </div>
   );
 }

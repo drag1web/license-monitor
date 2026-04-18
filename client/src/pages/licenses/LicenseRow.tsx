@@ -9,6 +9,9 @@ import {
   PinOff,
   MoreHorizontal,
   Pencil,
+  CalendarClock,
+  Building2,
+  Tags,
 } from "lucide-react";
 
 import type { Density } from "./types";
@@ -76,7 +79,10 @@ export function LicenseRow({
 }) {
   const compact = density === "compact";
 
-  const seatsT = toneFromSeats(safeNum(row.seats_used), safeNum(row.seats_total));
+  const seatsUsed = safeNum(row.seats_used);
+  const seatsTotal = safeNum(row.seats_total);
+
+  const seatsTone = toneFromSeats(seatsUsed, seatsTotal);
   const exp = formatExpires(row.expires_at ?? null);
 
   const st = statusTone(row);
@@ -86,40 +92,54 @@ export function LicenseRow({
 
   const tdPad = compact ? "py-2" : "py-3";
   const subText = compact ? "text-[10px]" : "text-[11px]";
-  const noteText = compact ? "hidden" : "block"; // note only in comfort
+  const showComfortNote = !compact && showNote && row.note;
 
-  const seatsBtn = cn(
-    "inline-flex items-center gap-2 rounded-2xl border",
-    "bg-white/[0.02] border-white/[0.08] hover:bg-white/[0.05] transition",
-    compact ? "px-2.5 py-1" : "px-3 py-1.5",
-    seatsT === "bad"
-      ? "text-rose-200"
-      : seatsT === "warn"
-        ? "text-amber-200"
-        : "text-white/80"
+  const statusDotCls =
+    st === "bad"
+      ? "bg-rose-200 shadow-[0_0_14px_rgba(251,113,133,0.35)]"
+      : st === "warn"
+        ? "bg-amber-200 shadow-[0_0_14px_rgba(253,230,138,0.25)]"
+        : "bg-emerald-200 shadow-[0_0_14px_rgba(110,231,183,0.25)]";
+
+  const statusDot = (
+    <span className={cn("inline-flex h-2.5 w-2.5 rounded-full", statusDotCls)} />
   );
 
+  const seatsBtn = cn(
+    "inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 transition",
+    "bg-[rgba(var(--card),0.18)] hover:bg-[rgba(var(--card),0.28)]",
+    compact && "px-2.5 py-1",
+    seatsTone === "bad"
+      ? "text-rose-200"
+      : seatsTone === "warn"
+        ? "text-amber-200"
+        : "text-[rgba(var(--fg),0.82)]"
+  );
+
+  const seatsBadgeCls =
+    seatsTone === "bad"
+      ? "bg-rose-500/10 text-rose-100"
+      : seatsTone === "warn"
+        ? "bg-amber-500/10 text-amber-100"
+        : "bg-[rgba(var(--card),0.24)] text-[rgba(var(--fg),0.76)]";
+
   const inputCls = cn(
-    "rounded-2xl border text-sm",
-    "bg-white/[0.03] border-white/[0.10] text-white/85",
+    "rounded-2xl text-sm",
+    "bg-[rgba(var(--card),0.22)] text-[rgba(var(--fg),0.88)]",
     "outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25",
     compact ? "w-16 px-2.5 py-1" : "w-20 px-3 py-1.5"
   );
 
   const actionBtn = cn(
     S.tinyBtn,
-    compact && "h-9 w-9 rounded-xl",
-    // in compact: actions are quieter until hover
-    compact && "opacity-40 group-hover:opacity-100 transition-opacity"
+    "bg-[rgba(var(--card),0.14)] hover:bg-[rgba(var(--card),0.26)]",
+    compact && "h-9 w-9 rounded-xl opacity-45 group-hover:opacity-100 transition-opacity"
   );
 
-  const statusDot = cn(
-    "inline-flex h-2.5 w-2.5 rounded-full",
-    st === "bad"
-      ? "bg-rose-200 shadow-[0_0_14px_rgba(251,113,133,0.35)]"
-      : st === "warn"
-        ? "bg-amber-200 shadow-[0_0_14px_rgba(253,230,138,0.25)]"
-        : "bg-emerald-200 shadow-[0_0_14px_rgba(110,231,183,0.25)]"
+  const metaChip = cn(
+    "inline-flex items-center gap-1.5 rounded-xl px-2 py-1",
+    "bg-[rgba(var(--card),0.18)] text-[rgba(var(--fg),0.56)]",
+    subText
   );
 
   return (
@@ -129,7 +149,7 @@ export function LicenseRow({
       className={cn(
         "group",
         S.rowShine,
-        pinned && "shadow-[inset_3px_0_0_rgba(34,211,238,0.32)]",
+        pinned && "shadow-[inset_3px_0_0_rgba(34,211,238,0.26)]",
         compact && "text-[13px]"
       )}
     >
@@ -139,67 +159,112 @@ export function LicenseRow({
             type="button"
             onClick={onToggleChecked}
             className={cn(
-              "inline-flex items-center justify-center rounded-xl hover:bg-white/5 transition",
-              compact ? "h-8 w-8" : "h-8 w-8"
+              "inline-flex items-center justify-center rounded-xl transition",
+              "hover:bg-[rgba(var(--card),0.22)]",
+              "h-8 w-8"
             )}
             title={checked ? "Unselect" : "Select"}
           >
             {checked ? (
-              <CheckSquare className="h-4 w-4 text-cyan-200" />
+              <CheckSquare className="h-4 w-4 text-cyan-300" />
             ) : (
-              <Square className="h-4 w-4 text-white/50" />
+              <Square className="h-4 w-4 text-[rgba(var(--fg),0.46)]" />
             )}
           </button>
         </Td>
       )}
 
-      {/* Product + note */}
+      {/* PRODUCT / META / NOTE */}
       <Td className={tdPad}>
-        <div className="flex items-start gap-2 min-w-0">
-          <button
-            type="button"
-            onClick={onOpenEditRow}
-            className={cn(S.productBtn, compact && "text-[13px]")}
-            title="Edit"
-          >
-            {row.product}
-          </button>
-
-          {pinned && (
-            <span
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-start gap-2">
+            <button
+              type="button"
+              onClick={onOpenEditRow}
               className={cn(
-                "mt-0.5 inline-flex items-center gap-1 text-cyan-200/80",
-                subText
+                "truncate text-left font-semibold text-[rgba(var(--fg),0.90)] transition",
+                "hover:text-cyan-200",
+                compact ? "text-[13px]" : "text-[14px]"
               )}
+              title="Edit"
             >
-              <Pin className="h-3.5 w-3.5" />
-              pinned
-            </span>
+              {row.product}
+            </button>
+
+            {pinned && (
+              <span
+                className={cn(
+                  "mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-xl px-2 py-1",
+                  "bg-cyan-500/10 text-cyan-200/85",
+                  subText
+                )}
+              >
+                <Pin className="h-3.5 w-3.5" />
+                pinned
+              </span>
+            )}
+          </div>
+
+          {!compact && (showVendor || showType) && (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {showVendor && row.vendor && (
+                <span className={metaChip}>
+                  <Building2 className="h-3.5 w-3.5" />
+                  {row.vendor}
+                </span>
+              )}
+
+              {showType && row.license_type && (
+                <span className={metaChip}>
+                  <Tags className="h-3.5 w-3.5" />
+                  {row.license_type}
+                </span>
+              )}
+            </div>
+          )}
+
+          {showComfortNote && (
+            <div className="mt-1.5 max-w-[62ch] truncate text-[12px] text-[rgba(var(--fg),0.46)]">
+              {row.note}
+            </div>
           )}
         </div>
-
-        {showNote && row.note && (
-          <div className={cn("mt-0.5 text-[12px] text-white/45 truncate max-w-[56ch]", noteText)}>
-            {row.note}
-          </div>
-        )}
       </Td>
 
-      {showVendor && <Td className={cn(tdPad, "text-white/65")}>{row.vendor ?? "—"}</Td>}
-      {showType && <Td className={cn(tdPad, "text-white/70")}>{row.license_type}</Td>}
+      {showVendor && (
+        <Td className={cn(tdPad, "text-[rgba(var(--fg),0.66)]")}>
+          {compact ? row.vendor ?? "—" : <span className="truncate">{row.vendor ?? "—"}</span>}
+        </Td>
+      )}
 
-      {/* Seats inline edit */}
+      {showType && (
+        <Td className={cn(tdPad, "text-[rgba(var(--fg),0.72)]")}>
+          {row.license_type || "—"}
+        </Td>
+      )}
+
+      {/* SEATS */}
       <Td className={cn(tdPad, "tabular-nums")}>
         {!isEditingSeats ? (
-          <button type="button" onClick={onBeginSeatsEdit} className={seatsBtn} title="Click to edit seats">
-            <span className="font-semibold">
-              {safeNum(row.seats_used)}/{safeNum(row.seats_total)}
+          <button
+            type="button"
+            onClick={onBeginSeatsEdit}
+            className={seatsBtn}
+            title="Click to edit seats"
+          >
+            <span
+              className={cn(
+                "rounded-xl px-2.5 py-1 font-semibold",
+                seatsBadgeCls
+              )}
+            >
+              {seatsUsed}/{seatsTotal}
             </span>
 
             {compact ? (
-              <Pencil className="h-3.5 w-3.5 text-white/40" />
+              <Pencil className="h-3.5 w-3.5 text-[rgba(var(--fg),0.40)]" />
             ) : (
-              <span className={cn("text-white/35", subText)}>edit</span>
+              <span className={cn("text-[rgba(var(--fg),0.36)]", subText)}>edit</span>
             )}
           </button>
         ) : (
@@ -215,7 +280,9 @@ export function LicenseRow({
               }}
               autoFocus
             />
-            <span className="text-white/35">/</span>
+
+            <span className="text-[rgba(var(--fg),0.35)]">/</span>
+
             <input
               className={inputCls}
               type="number"
@@ -231,15 +298,16 @@ export function LicenseRow({
               variant="ghost"
               size="sm"
               onClick={onCommitSeatsEdit}
-              className={cn("px-3", compact && "h-8 px-2.5 rounded-xl")}
+              className={cn("px-3", compact && "h-8 rounded-xl px-2.5")}
             >
               Save
             </Button>
+
             <Button
               variant="ghost"
               size="sm"
               onClick={onCancelSeatsEdit}
-              className={cn("px-3", compact && "h-8 px-2.5 rounded-xl")}
+              className={cn("px-3", compact && "h-8 rounded-xl px-2.5")}
             >
               Cancel
             </Button>
@@ -247,50 +315,61 @@ export function LicenseRow({
         )}
       </Td>
 
-      {/* Expires */}
+      {/* EXPIRES */}
       <Td
         className={cn(
           tdPad,
-          "text-white/70",
           exp.tone === "bad"
-            ? "text-rose-200 font-semibold"
+            ? "text-rose-200"
             : exp.tone === "warn"
-              ? "text-amber-200 font-semibold"
-              : ""
+              ? "text-amber-200"
+              : "text-[rgba(var(--fg),0.74)]"
         )}
       >
         <div className={cn("flex items-center gap-2", compact && "gap-1.5")}>
-          <span>{exp.text}</span>
-          {/* hint только в comfort */}
-          {!compact && exp.hint && <span className={cn("text-white/40", subText)}>{exp.hint}</span>}
+          {!compact && (
+            <CalendarClock className="h-4 w-4 shrink-0 text-[rgba(var(--fg),0.34)]" />
+          )}
+
+          <div className="min-w-0">
+            <div className="font-medium">{exp.text}</div>
+            {!compact && exp.hint && (
+              <div className={cn("mt-0.5 text-[rgba(var(--fg),0.40)]", subText)}>
+                {exp.hint}
+              </div>
+            )}
+          </div>
         </div>
       </Td>
 
-      {/* Status */}
+      {/* STATUS */}
       <Td className={tdPad}>
         {compact ? (
-          <span className={statusDot} title={statusLabel} />
+          <span title={statusLabel}>{statusDot}</span>
         ) : (
           <span className={pill(st)}>
-            <span className={cn("h-2 w-2 rounded-full", statusDot)} />
+            {statusDot}
             {statusLabel}
           </span>
         )}
       </Td>
 
-      {/* Actions */}
+      {/* ACTIONS */}
       <Td className={cn(tdPad, "text-right")}>
         <div className={cn("inline-flex items-center gap-2", compact && "gap-1.5")}>
           <button
             type="button"
-            className={cn(actionBtn, pinned && "border-cyan-300/20 bg-cyan-500/10")}
+            className={cn(
+              actionBtn,
+              pinned && "bg-cyan-500/10"
+            )}
             onClick={onTogglePin}
             title={pinned ? "Unpin" : "Pin"}
           >
             {pinned ? (
-              <PinOff className="h-4 w-4 text-cyan-200/80" />
+              <PinOff className="h-4 w-4 text-cyan-200/85" />
             ) : (
-              <Pin className="h-4 w-4 text-white/70" />
+              <Pin className="h-4 w-4 text-[rgba(var(--fg),0.70)]" />
             )}
           </button>
 
@@ -300,7 +379,7 @@ export function LicenseRow({
             onClick={(e) => onOpenMenu(e.currentTarget)}
             title="More"
           >
-            <MoreHorizontal className="h-4 w-4 text-white/70" />
+            <MoreHorizontal className="h-4 w-4 text-[rgba(var(--fg),0.70)]" />
           </button>
         </div>
       </Td>
