@@ -202,52 +202,32 @@ export function logout() {
 export type LicenseType = "perpetual" | "subscription" | "trial";
 
 export type LicenseRow = {
-  id: string; // local id (uuid-like)
+  id: string;
   product: string;
   vendor?: string;
   license_type: LicenseType;
-
   seats_total: number;
   seats_used: number;
-
-  // optional dates (ISO: YYYY-MM-DD)
   starts_at?: string;
   expires_at?: string;
-
   note?: string;
-  updated_at?: string; // set by repo on save
+  updated_at?: string;
 };
-
-type ElectronLicensesApi = {
-  list: () => Promise<LicenseRow[]>;
-  upsert: (row: LicenseRow) => Promise<LicenseRow>;
-  remove: (id: string) => Promise<{ ok: boolean }>;
-};
-
-function getLicensesApi(): ElectronLicensesApi {
-  const w = window as any;
-  const api = w?.electron?.licenses as ElectronLicensesApi | undefined;
-
-  if (!api?.list || !api?.upsert || !api?.remove) {
-    throw new Error(
-      "Licenses registry API is not available. " +
-        "Открой приложение в Electron и проверь preload.cjs (window.electron.licenses.*)."
-    );
-  }
-
-  return api;
-}
 
 function normalizeRow(r: LicenseRow): LicenseRow {
   return {
     ...r,
+    vendor: r.vendor ?? "",
+    note: r.note ?? "",
+    starts_at: r.starts_at ?? "",
+    expires_at: r.expires_at ?? "",
     seats_total: Number.isFinite(Number(r.seats_total)) ? Number(r.seats_total) : 0,
     seats_used: Number.isFinite(Number(r.seats_used)) ? Number(r.seats_used) : 0,
   };
 }
 
 export async function getLicenses(): Promise<LicenseRow[]> {
-  const rows = await getLicensesApi().list();
+  const rows = await j<LicenseRow[]>("/api/licenses");
   return (rows ?? []).map(normalizeRow);
 }
 
@@ -257,8 +237,12 @@ export async function upsertLicense(row: LicenseRow): Promise<LicenseRow> {
   if (!row?.license_type) throw new Error("upsertLicense: license_type required");
 
   const payload = normalizeRow(row);
+
   try {
-    return await getLicensesApi().upsert(payload);
+    return await j<LicenseRow>("/api/licenses/upsert", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   } catch (e) {
     throw new Error(asErrorMessage(e));
   }
@@ -266,8 +250,11 @@ export async function upsertLicense(row: LicenseRow): Promise<LicenseRow> {
 
 export async function removeLicense(id: string): Promise<{ ok: boolean }> {
   if (!id) return { ok: false };
+
   try {
-    return await getLicensesApi().remove(id);
+    return await j<{ ok: boolean }>(`/api/licenses/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   } catch (e) {
     throw new Error(asErrorMessage(e));
   }
@@ -286,7 +273,6 @@ declare global {
         close: () => Promise<void>;
         isMaximized: () => Promise<boolean>;
       };
-      licenses?: ElectronLicensesApi;
     };
   }
 }

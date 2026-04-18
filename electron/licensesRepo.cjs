@@ -25,6 +25,9 @@ function createLicensesRepo(dataDir) {
 
   return {
     async list() {
+      const rows = selectAllStmt.all();
+      console.log("LICENSES FROM DB:", rows);
+      return rows;
       return await readAll();
     },
 

@@ -4,7 +4,7 @@ import { writeReportXlsx } from "../report/writeReportXlsx.js";
 import { buildRules } from "../core/mapping.js";
 import { buildReport, type InstallationRow, type LicenseRow } from "../core/compliance.js";
 import { validateInstallations, validateLicenses } from "../core/validate.js";
-import { initDatabase, saveRun, saveResults } from "../db/database.js";
+import { initDatabase, saveRun, saveResults, createImportLog } from "../db/database.js";
 
 export type Config = {
   installationsPath: string;
@@ -20,6 +20,7 @@ export type Config = {
   runsCsvPath: string;
 
   expiresDays: number;
+  legacyLicensesJsonPath?: string;
 };
 
 export async function runPipeline(config: Config): Promise<{ runId: number }> {
@@ -28,6 +29,22 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
   // 1) load
   const installsRaw = await readCsv<InstallationRow>(config.installationsPath);
   const licensesRaw = await readCsv<LicenseRow>(config.licensesPath);
+
+  createImportLog(db, {
+    import_type: "installations",
+    file_name: "installations.csv",
+    source_path: config.installationsPath,
+    rows_count: installsRaw.length,
+    status: "success",
+  });
+
+  createImportLog(db, {
+    import_type: "licenses",
+    file_name: "licenses.csv",
+    source_path: config.licensesPath,
+    rows_count: licensesRaw.length,
+    status: "success",
+  });
 
   // 2) validate
   const vi = validateInstallations(installsRaw);
@@ -45,6 +62,14 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
   // 3) mapping
   const mappingRows = await readCsv<{ pattern: string; canonical_product: string }>(config.mappingPath);
   const rules = buildRules(mappingRows);
+
+    createImportLog(db, {
+    import_type: "mapping",
+    file_name: "mapping.csv",
+    source_path: config.mappingPath,
+    rows_count: mappingRows.length,
+    status: "success",
+  });
 
   // 4) report
   const { report, unmatched } = buildReport(vi.good, vl.good, rules, config.expiresDays);

@@ -15,6 +15,7 @@ import { cn } from "../ui/cn/cn";
 import { Dropdown } from "../components/Dropdown";
 import { ConfirmDialog } from "../ui/modal/ConfirmDialog";
 import { useConfirmDialog } from "../ui/modal/useConfirmDialog";
+import { ViewerNotice } from "../components/ViewerNotice";
 import { useAuth } from "../auth/AuthContext";
 import {
   Table,
@@ -553,12 +554,7 @@ export default function Runs() {
       />
 
       {!isAdmin && (
-        <div className="rounded-2xl bg-[rgba(var(--card),0.20)] px-4 py-3">
-          <div className="text-sm font-semibold text-[rgba(var(--fg),0.86)]">Режим просмотра</div>
-          <div className="mt-1 text-xs text-[rgba(var(--fg),0.56)]">
-            У вас нет прав на удаление и очистку истории запусков.
-          </div>
-        </div>
+        <ViewerNotice message="У вас нет прав на удаление и очистку истории запусков. Доступен только просмотр истории." />
       )}
 
       {/* HERO */}
@@ -586,7 +582,7 @@ export default function Runs() {
                 </div>
 
                 <div className="mt-1 text-3xl font-semibold tracking-tight text-[rgb(var(--fg))]">
-                  Запуски
+                  История запусков
                 </div>
 
                 <div className="mt-2 max-w-[72ch] text-sm leading-relaxed text-[rgba(var(--fg),0.58)]">
@@ -596,7 +592,7 @@ export default function Runs() {
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-2 rounded-2xl bg-[rgba(var(--card),0.22)] px-3 py-1.5 text-[12px] font-semibold text-[rgba(var(--fg),0.76)]">
                     <Sparkles className="h-4 w-4 opacity-80" />
-                    History registry
+                    История проверок
                   </span>
 
                   {last && (
@@ -615,10 +611,10 @@ export default function Runs() {
                 size="sm"
                 onClick={refresh}
                 disabled={refreshBusy || busy}
-                title="Refresh"
+                title="Обновить"
               >
                 <RefreshCw className={cn("h-4 w-4", refreshBusy && "animate-spin")} />
-                Refresh
+                Обновить
               </Button>
 
               <Button
@@ -632,7 +628,7 @@ export default function Runs() {
                 title="Copy last run id"
               >
                 <Copy className="h-4 w-4" />
-                Copy last id
+                Копировать ID
               </Button>
 
               <a
@@ -647,7 +643,7 @@ export default function Runs() {
                 )}
               >
                 <DownloadIcon className="h-4 w-4" />
-                Export runs.csv
+                Экспорт runs.csv
               </a>
 
               <span ref={menuAnchorRef} className="inline-flex">
@@ -659,7 +655,7 @@ export default function Runs() {
                   disabled={busy}
                 >
                   <Menu className="h-4 w-4" />
-                  Actions
+                  Действия
                 </Button>
               </span>
 
@@ -671,11 +667,11 @@ export default function Runs() {
                 align="end"
                 sideOffset={10}
               >
-                <MenuSection title="Actions">
+                <MenuSection title="Действия">
                   {isAdmin && (
                     <MenuItem
                       icon={<Trash2 className="h-4 w-4 text-rose-200/90" />}
-                      title="Delete runs…"
+                      title="Удалить запуски..."
                       description="Включить режим выбора"
                       right={runs.length}
                       disabled={busy}
@@ -689,7 +685,7 @@ export default function Runs() {
                         className={cn("h-4 w-4 text-cyan-200/80", refreshBusy && "animate-spin")}
                       />
                     }
-                    title="Refresh"
+                    title="Обновить"
                     description="Перезагрузить список запусков"
                     disabled={refreshBusy || busy}
                     onClick={async () => {
@@ -700,7 +696,7 @@ export default function Runs() {
 
                   <MenuItem
                     icon={<DownloadIcon className="h-4 w-4 text-cyan-200/80" />}
-                    title="Export runs.csv"
+                    title="Экспорт runs.csv"
                     description="Скачать историю запусков"
                     href={download.runsCsv}
                     disabled={busy}
@@ -709,7 +705,7 @@ export default function Runs() {
 
                   <MenuItem
                     icon={<Copy className="h-4 w-4 text-cyan-200/80" />}
-                    title="Copy last run id"
+                    title="Копировать ID последнего запуска"
                     description={`Быстро скопировать #${last?.id ?? "—"}`}
                     disabled={!last || busy}
                     onClick={async () => {
@@ -723,10 +719,10 @@ export default function Runs() {
                   <>
                     <MenuDivider />
 
-                    <MenuSection title="Selection tools">
+                    <MenuSection title="Инструменты выделения">
                       <MenuItem
                         icon={<CalendarClock className="h-4 w-4 text-[rgba(var(--fg),0.65)]" />}
-                        title="Select last 10"
+                        title="Выбрать последние 10"
                         description="Из видимых 50"
                         disabled={busy}
                         onClick={() => withSelection(() => selectLastN(10))}
@@ -734,7 +730,7 @@ export default function Runs() {
 
                       <MenuItem
                         icon={<ShieldAlert className="h-4 w-4 text-amber-200/80" />}
-                        title="Select risky only"
+                        title="Выбрать только рискованные"
                         description="deficit/expiring/unmatched"
                         right={riskyCount}
                         disabled={busy}
@@ -744,7 +740,7 @@ export default function Runs() {
 
                       <MenuItem
                         icon={<Layers className="h-4 w-4 text-[rgba(var(--fg),0.65)]" />}
-                        title="Invert selection"
+                        title="Инвертировать выделение"
                         description="В пределах видимых 50"
                         disabled={busy}
                         onClick={() => withSelection(invertSelection)}
@@ -752,7 +748,7 @@ export default function Runs() {
 
                       <MenuItem
                         icon={<Minus className="h-4 w-4 text-[rgba(var(--fg),0.65)]" />}
-                        title="Clear selection"
+                        title="Снять выделение"
                         description="Снять всё"
                         disabled={busy}
                         onClick={() => withSelection(clearSelection)}
@@ -761,10 +757,10 @@ export default function Runs() {
 
                     <MenuDivider />
 
-                    <MenuSection title="Retention">
+                    <MenuSection title="Очистка истории">
                       <MenuItem
                         icon={<TimerReset className="h-4 w-4 text-amber-200/80" />}
-                        title="Delete older than 30 days"
+                        title="Удалить старше 30 дней"
                         description="Очистка по возрасту"
                         disabled={busy}
                         onClick={() => doOlderThan(30)}
@@ -773,7 +769,7 @@ export default function Runs() {
 
                       <MenuItem
                         icon={<TimerReset className="h-4 w-4 text-amber-200/80" />}
-                        title="Delete older than 90 days"
+                        title="Удалить старше 90 дней"
                         description="Очистка по возрасту"
                         disabled={busy}
                         onClick={() => doOlderThan(90)}
@@ -784,7 +780,7 @@ export default function Runs() {
 
                       <MenuItem
                         icon={<HardDrive className="h-4 w-4 text-rose-200/90" />}
-                        title="Keep only last 50"
+                        title="Оставить только последние 50"
                         description="Потребует ввод KEEP_LAST_50"
                         disabled={busy}
                         onClick={() => doKeepLast(50)}
@@ -793,7 +789,7 @@ export default function Runs() {
 
                       <MenuItem
                         icon={<HardDrive className="h-4 w-4 text-rose-200/90" />}
-                        title="Keep only last 200"
+                        title="Оставить только последние 200"
                         description="Потребует ввод KEEP_LAST_200"
                         disabled={busy}
                         onClick={() => doKeepLast(200)}
@@ -804,7 +800,7 @@ export default function Runs() {
 
                       <MenuItem
                         icon={<Skull className="h-4 w-4 text-rose-200/90" />}
-                        title="Delete ALL runs"
+                        title="Удалить все запуски"
                         description="Потребует ввод DELETE_ALL"
                         disabled={busy}
                         onClick={doDeleteAll}
@@ -818,7 +814,7 @@ export default function Runs() {
 
                 <MenuItem
                   icon={<X className="h-4 w-4 text-[rgba(var(--fg),0.60)]" />}
-                  title="Close"
+                  title="Закрыть"
                   disabled={busy}
                   onClick={() => setMenuOpen(false)}
                 />
@@ -828,17 +824,17 @@ export default function Runs() {
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
             <SummaryChip label="Всего запусков" value={runs.length} tone="none" />
-            <SummaryChip label="Risky runs" value={riskyCount} tone={riskyCount ? "warn" : "ok"} />
-            <SummaryChip label="Products" value={totalProducts} tone="none" />
-            <SummaryChip label="Deficit" value={totalDeficit} tone={totalDeficit ? "bad" : "ok"} />
-            <SummaryChip label="Expiring / Unmatched" value={`${totalExpiring}/${totalUnmatched}`} tone={totalExpiring || totalUnmatched ? "warn" : "ok"} />
+            <SummaryChip label="Рискованные" value={riskyCount} tone={riskyCount ? "warn" : "ok"} />
+            <SummaryChip label="Продукты" value={totalProducts} tone="none" />
+            <SummaryChip label="Дефицит" value={totalDeficit} tone={totalDeficit ? "bad" : "ok"} />
+            <SummaryChip label="Истекающие / Несопоставленные" value={`${totalExpiring}/${totalUnmatched}`} tone={totalExpiring || totalUnmatched ? "warn" : "ok"} />
           </div>
 
           {last && (
             <div className="rounded-2xl bg-[rgba(var(--card),0.18)] px-4 py-3">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0">
-                  <div className="text-[11px] text-[rgba(var(--fg),0.46)]">Latest run</div>
+                  <div className="text-[11px] text-[rgba(var(--fg),0.46)]">Последний запуск</div>
                   <div className="mt-1 text-sm font-semibold text-[rgba(var(--fg),0.86)]">
                     #{last.id} • {last.run_at}
                   </div>
@@ -853,7 +849,7 @@ export default function Runs() {
                     "transition"
                   )}
                 >
-                  Open latest
+                  Открыть последний
                   <ArrowUpRight className="h-4 w-4 text-[rgba(var(--fg),0.46)]" />
                 </Link>
               </div>
@@ -879,13 +875,13 @@ export default function Runs() {
       >
         <Table>
           <TableCaption
-            title="Запуски"
+            title="Журнал запусков"
             description="Сводка по последним проверкам и результатам сопоставления."
             right={
               isAdmin && selectMode ? (
                 <div className="flex items-center gap-2">
                   <div className="text-[11px] text-[rgba(var(--fg),0.45)]">
-                    Selected: <span className="text-[rgba(var(--fg),0.80)]">{selected.size}</span>
+                    Выбрано: <span className="text-[rgba(var(--fg),0.80)]">{selected.size}</span>
                   </div>
 
                   <Button
@@ -894,10 +890,10 @@ export default function Runs() {
                     disabled={busy || selected.size === 0}
                     onClick={deleteSelected}
                     className="min-w-[160px] justify-center"
-                    title={selected.size === 0 ? "Nothing selected" : "Delete selected"}
+                    title={selected.size === 0 ? "Ничего не выбрано" : "Удалить выбранные"}
                   >
                     <Trash2 className="h-4 w-4" />
-                    {busy ? "Deleting…" : "Delete selected"}
+                    {busy ? "Удаление…" : "Удалить выбранные"}
                   </Button>
 
                   <Button
@@ -908,7 +904,7 @@ export default function Runs() {
                     title="Cancel selection mode"
                   >
                     <X className="h-4 w-4" />
-                    Cancel
+                    Отмена
                   </Button>
                 </div>
               ) : (
@@ -949,7 +945,7 @@ export default function Runs() {
                           ) : (
                             <Square className="h-4 w-4" />
                           )}
-                          <span className="hidden sm:inline">all</span>
+                          <span className="hidden sm:inline">Все</span>
                         </button>
                       </th>
                     )}
@@ -958,37 +954,37 @@ export default function Runs() {
                       label="id"
                       dir={sortKey === "id" ? sortDir : null}
                       onToggle={() => toggleSort("id", "asc")}
-                      hint="Sort by id"
+                      hint="Сортировать по идентификатору"
                     />
                     <SortTh
-                      label="run_at"
+                      label="дата запуска"
                       dir={sortKey === "run_at" ? sortDir : null}
                       onToggle={() => toggleSort("run_at", "desc")}
-                      hint="Sort by run time"
+                      hint="Сортировать по дате запуска"
                     />
                     <SortTh
-                      label="products"
+                      label="продукты"
                       dir={sortKey === "total_products" ? sortDir : null}
                       onToggle={() => toggleSort("total_products", "desc")}
-                      hint="Sort by total products"
+                      hint="Сортировать по количеству продуктов"
                     />
                     <SortTh
-                      label="deficit"
+                      label="дефицит"
                       dir={sortKey === "deficit_products" ? sortDir : null}
                       onToggle={() => toggleSort("deficit_products", "desc")}
-                      hint="Sort by deficits"
+                      hint="Сортировать по количеству дефицитов"
                     />
                     <SortTh
-                      label="expiring"
+                      label="истекают"
                       dir={sortKey === "expiring_products" ? sortDir : null}
                       onToggle={() => toggleSort("expiring_products", "desc")}
-                      hint="Sort by expiring"
+                      hint="Сортировать по количеству истекающих"
                     />
                     <SortTh
-                      label="unmatched"
+                      label="несопоставленные"
                       dir={sortKey === "unmatched_installs" ? sortDir : null}
                       onToggle={() => toggleSort("unmatched_installs", "desc")}
-                      hint="Sort by unmatched installs"
+                      hint="Сортировать по количеству несопоставленных"
                     />
                   </tr>
                 </THead>

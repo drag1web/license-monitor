@@ -1,9 +1,12 @@
 import type React from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { TopBar } from "./components/TopBar";
 import { AppStatusDock } from "./components/AppStatusDock";
 
 export function AppLayout({ children }: { children?: React.ReactNode }) {
+  const { pathname } = useLocation();
+  const isLoginPage = pathname === "/login";
+
   return (
     <div
       className={[
@@ -13,9 +16,8 @@ export function AppLayout({ children }: { children?: React.ReactNode }) {
     >
       <TopBar title="License Monitor" />
 
-      <AppStatusDock />
+      {!isLoginPage && <AppStatusDock />}
 
-      {/* Scroll only inside content area */}
       <div className="h-[calc(100vh-48px)] overflow-y-auto no-scrollbar">
         {children ?? <Outlet />}
       </div>

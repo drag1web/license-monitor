@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,22 +14,18 @@ import {
   KeyRound,
   ArrowRight,
   Zap,
+  Database,
+  FileSpreadsheet,
+  MonitorSmartphone,
+  CheckCircle2,
+  Gauge,
+  Wand2,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuth } from "../auth/AuthContext";
 import { cn } from "../ui/cn/cn";
-
-/**
- * ==========================================
- *  Login — "premium glass" edition
- * ==========================================
- * - consistent palette with dashboard
- * - background: blobs + grid + noise + vignette
- * - split layout: product pitch + secure sign-in
- * - animated error, focus rings, strong UI polish
- */
 
 const schema = z.object({
   login: z.string().min(3, "Минимум 3 символа"),
@@ -107,7 +103,7 @@ function GlassPanel({
   return (
     <div
       className={cn(
-        "relative rounded-3xl p-8 overflow-hidden",
+        "relative rounded-[28px] p-8 overflow-hidden",
         "bg-white/[0.04] backdrop-blur-xl",
         "border border-white/10",
         "shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_20px_90px_-45px_rgba(0,0,0,0.92)]",
@@ -184,6 +180,58 @@ function DividerLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+function MiniFeature({
+  icon,
+  title,
+  text,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+      <div className="flex items-center gap-3">
+        <div className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/[0.04] text-cyan-100">
+          {icon}
+        </div>
+        <div>
+          <div className="text-sm font-semibold text-white/88">{title}</div>
+          <div className="text-xs text-white/50">{text}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+      <div className="text-[11px] text-white/45">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-white/90">{value}</div>
+    </div>
+  );
+}
+
+function passwordStrength(password: string) {
+  let score = 0;
+  if (password.length >= 6) score++;
+  if (password.length >= 8) score++;
+  if (/[A-ZА-Я]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-zА-Яа-я0-9]/.test(password)) score++;
+
+  if (score <= 1) return { label: "Слабый", cls: "bg-rose-500/70", text: "text-rose-200" };
+  if (score <= 3) return { label: "Средний", cls: "bg-amber-400/70", text: "text-amber-200" };
+  return { label: "Хороший", cls: "bg-emerald-400/70", text: "text-emerald-200" };
+}
+
 export default function Login() {
   const nav = useNavigate();
   const { login: doLogin, register: doRegister } = useAuth();
@@ -191,11 +239,15 @@ export default function Login() {
   const [show, setShow] = useState(false);
   const [apiError, setApiError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [mode, setMode] = useState<"login" | "register">("login");
 
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
     setFocus,
   } = useForm<FormValues>({
@@ -204,24 +256,34 @@ export default function Login() {
     mode: "onSubmit",
   });
 
+  const watchedPassword = watch("password");
+  const strength = useMemo(() => passwordStrength(watchedPassword ?? ""), [watchedPassword]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("lm_login_saved");
+    if (saved) {
+      setValue("login", saved);
+    }
+  }, [setValue]);
+
   const tips = useMemo(
     () => [
       {
-        k: "Дефолтные креды",
+        k: "Демо-доступ",
         v: "admin / admin",
         icon: <KeyRound className="h-4 w-4" />,
         tone: "info" as const,
       },
       {
-        k: "Доступ",
-        v: "нужен для запусков проверок",
-        icon: <Zap className="h-4 w-4" />,
+        k: "Среда",
+        v: "Electron + Express + SQLite",
+        icon: <Database className="h-4 w-4" />,
         tone: "neutral" as const,
       },
       {
-        k: "Рекомендация",
-        v: "поменяй пароль позже",
-        icon: <Sparkles className="h-4 w-4" />,
+        k: "Импорт",
+        v: "CSV, отчёты и история запусков",
+        icon: <FileSpreadsheet className="h-4 w-4" />,
         tone: "warn" as const,
       },
     ],
@@ -232,10 +294,18 @@ export default function Login() {
     setApiError("");
 
     try {
+      const cleanLogin = v.login.trim();
+
       if (mode === "login") {
-        await doLogin(v.login.trim(), v.password);
+        await doLogin(cleanLogin, v.password);
       } else {
-        await doRegister(v.login.trim(), v.password);
+        await doRegister(cleanLogin, v.password);
+      }
+
+      if (remember) {
+        localStorage.setItem("lm_login_saved", cleanLogin);
+      } else {
+        localStorage.removeItem("lm_login_saved");
       }
 
       nav("/", { replace: true });
@@ -256,31 +326,27 @@ export default function Login() {
     }
   }
 
+  function fillAdminDemo() {
+    setValue("login", "admin");
+    setValue("password", "admin");
+    setApiError("");
+  }
+
   return (
     <motion.div
       initial="hidden"
       animate="show"
       variants={pageAnim}
       transition={{ duration: 0.35, ease: "easeOut" }}
-      className="min-h-screen relative overflow-hidden bg-[#060B16] text-white"
+      className="min-h-[calc(100vh-48px)] relative overflow-hidden bg-[#060B16] text-white"
     >
-      {/* Background layers */}
       <div className="absolute inset-0">
-        {/* Base gradient */}
         <div className="absolute inset-0 bg-[radial-gradient(1200px_700px_at_18%_10%,rgba(99,102,241,0.26),transparent_55%),radial-gradient(950px_620px_at_82%_22%,rgba(34,211,238,0.20),transparent_58%),radial-gradient(980px_760px_at_52%_92%,rgba(16,185,129,0.14),transparent_60%)]" />
-
-        {/* Glow blobs */}
         <div className="absolute -top-52 -left-56 h-[680px] w-[680px] rounded-full bg-indigo-500/16 blur-3xl" />
         <div className="absolute -top-44 -right-60 h-[720px] w-[720px] rounded-full bg-cyan-400/12 blur-3xl" />
         <div className="absolute -bottom-56 left-1/2 -translate-x-1/2 h-[740px] w-[900px] rounded-full bg-emerald-400/10 blur-3xl" />
-
-        {/* Micro grid */}
         <div className="absolute inset-0 opacity-[0.085] [background-image:linear-gradient(to_right,rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:28px_28px]" />
-
-        {/* Vignette */}
         <div className="absolute inset-0 bg-[radial-gradient(900px_560px_at_50%_25%,transparent_35%,rgba(0,0,0,0.55)_100%)]" />
-
-        {/* Noise */}
         <div className="absolute inset-0 opacity-[0.06] [background-image:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.8%22 numOctaves=%222%22 stitchTiles=%22stitch%22/></filter><rect width=%22120%22 height=%22120%22 filter=%22url(%23n)%22 opacity=%220.4%22/></svg>')]" />
       </div>
 
@@ -290,17 +356,16 @@ export default function Login() {
           animate="show"
           variants={cardAnim}
           transition={{ duration: 0.55, ease: "easeOut" }}
-          className="w-full max-w-6xl grid lg:grid-cols-2 gap-6"
+          className="w-full max-w-7xl grid lg:grid-cols-[1.15fr_0.95fr] gap-6"
         >
-          {/* Left: Product / Promo */}
           <motion.div
             initial={{ opacity: 0, x: -14 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.05, duration: 0.55, ease: "easeOut" }}
           >
-            <GlassPanel glow="indigo">
+            <GlassPanel glow="indigo" className="h-full">
               <div className="flex items-center gap-3">
-                <div className="h-11 w-11 rounded-2xl bg-white/8 flex items-center justify-center border border-white/10">
+                <div className="h-12 w-12 rounded-2xl bg-white/8 flex items-center justify-center border border-white/10">
                   <ShieldCheck className="h-5 w-5 text-white/85" />
                 </div>
                 <div className="min-w-0">
@@ -313,26 +378,59 @@ export default function Login() {
                 </div>
               </div>
 
-              <p className="mt-5 text-white/72 leading-relaxed">
-                Доступ открывает запуск проверок, историю прогонов и выгрузку
-                отчётов. Всё — в одном интерфейсе: Electron + SPA, сервер —
-                Express + SQLite.
-              </p>
+              <div className="mt-7 max-w-[56ch]">
+                <h1 className="text-4xl font-semibold leading-tight tracking-tight text-white/95">
+                  Безопасный вход в систему контроля лицензий
+                </h1>
+                <p className="mt-4 text-[15px] leading-7 text-white/68">
+                  Управляй проверками, анализируй историю запусков, отслеживай
+                  дефициты и сроки истечения лицензий в едином десктопном интерфейсе.
+                </p>
+              </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Pill tone="info" icon={<CircleCheck className="h-4 w-4" />}>
-                  Быстро
+              <div className="mt-6 flex flex-wrap gap-2">
+                <Pill tone="info" icon={<MonitorSmartphone className="h-4 w-4" />}>
+                  Desktop runtime
                 </Pill>
-                <Pill tone="neutral" icon={<ShieldCheck className="h-4 w-4" />}>
-                  Контроль
+                <Pill tone="neutral" icon={<Gauge className="h-4 w-4" />}>
+                  Realtime dashboard
                 </Pill>
-                <Pill tone="neutral" icon={<Sparkles className="h-4 w-4" />}>
-                  Отчёты
+                <Pill tone="ok" icon={<CheckCircle2 className="h-4 w-4" />}>
+                  Secure session
                 </Pill>
               </div>
 
-              <div className="mt-7">
-                <DividerLabel>подсказки</DividerLabel>
+              <div className="mt-8 grid gap-3 md:grid-cols-3">
+                <MiniStat label="Хранилище" value="SQLite" />
+                <MiniStat label="Импорт" value="CSV" />
+                <MiniStat label="Формат отчётов" value="CSV / XLSX" />
+              </div>
+
+              <div className="mt-8 grid gap-3 md:grid-cols-2">
+                <MiniFeature
+                  icon={<Database className="h-5 w-5" />}
+                  title="Локальная база данных"
+                  text="История запусков, результаты анализа и реестр лицензий."
+                />
+                <MiniFeature
+                  icon={<FileSpreadsheet className="h-5 w-5" />}
+                  title="Экспорт отчётов"
+                  text="Быстрая выгрузка CSV и XLSX для анализа и проверки."
+                />
+                <MiniFeature
+                  icon={<ShieldCheck className="h-5 w-5" />}
+                  title="Контроль доступа"
+                  text="Разделение ролей admin / viewer и защищённые действия."
+                />
+                <MiniFeature
+                  icon={<Sparkles className="h-5 w-5" />}
+                  title="Умный интерфейс"
+                  text="Детали запусков, сравнение diff и просмотр рисков."
+                />
+              </div>
+
+              <div className="mt-8">
+                <DividerLabel>быстрый доступ</DividerLabel>
                 <div className="mt-4 grid gap-3">
                   {tips.map((t) => (
                     <div
@@ -363,7 +461,7 @@ export default function Login() {
                         </div>
                       </div>
 
-                      {t.k === "Дефолтные креды" && (
+                      {t.k === "Демо-доступ" && (
                         <button
                           type="button"
                           onClick={copyDefaultCreds}
@@ -375,7 +473,7 @@ export default function Login() {
                           )}
                           title="Скопировать"
                         >
-                          {copied ? "Скопировано" : "Copy"}
+                          {copied ? "Скопировано" : "Копировать"}
                         </button>
                       )}
                     </div>
@@ -384,15 +482,14 @@ export default function Login() {
               </div>
 
               <div className="mt-7 flex items-center gap-2 text-xs text-white/45">
-                <Sparkles className="h-4 w-4" />
+                <Wand2 className="h-4 w-4" />
                 <span>
-                  Потом: поменяй креды и вынеси secret в env (как взрослый).
+                  После входа можно сменить пароль и донастроить окружение.
                 </span>
               </div>
             </GlassPanel>
           </motion.div>
 
-          {/* Right: Login form */}
           <motion.div
             initial={{ opacity: 0, x: 14 }}
             animate={{ opacity: 1, x: 0 }}
@@ -409,14 +506,49 @@ export default function Login() {
                   </div>
                   <div className="mt-1 text-sm text-white/50">
                     {mode === "login"
-                      ? "Авторизация нужна, чтобы управлять проверками и отчётами."
-                      : "Создай локальную учетную запись для работы с системой."}
+                      ? "Авторизация нужна для запуска проверок, выгрузки отчётов и управления системой."
+                      : "Создай локальную учётную запись для работы с приложением."}
                   </div>
                 </div>
 
                 <Pill tone="neutral" icon={<ShieldCheck className="h-4 w-4" />}>
-                  Secure UI
+                  Защищённый вход
                 </Pill>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-1">
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApiError("");
+                      setMode("login");
+                    }}
+                    className={cn(
+                      "rounded-2xl px-4 py-2.5 text-sm font-semibold transition",
+                      mode === "login"
+                        ? "bg-white/10 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
+                        : "text-white/60 hover:text-white/85 hover:bg-white/[0.04]"
+                    )}
+                  >
+                    Вход
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setApiError("");
+                      setMode("register");
+                    }}
+                    className={cn(
+                      "rounded-2xl px-4 py-2.5 text-sm font-semibold transition",
+                      mode === "register"
+                        ? "bg-white/10 text-white shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
+                        : "text-white/60 hover:text-white/85 hover:bg-white/[0.04]"
+                    )}
+                  >
+                    Регистрация
+                  </button>
+                </div>
               </div>
 
               <AnimatePresence>
@@ -438,7 +570,6 @@ export default function Login() {
               </AnimatePresence>
 
               <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
-                {/* Login */}
                 <Field
                   label="Логин"
                   error={errors.login?.message}
@@ -446,14 +577,15 @@ export default function Login() {
                   focusGlow="cyan"
                 >
                   <input
-                    {...register("login")}
+                    {...register("login", {
+                      onChange: () => apiError && setApiError(""),
+                    })}
                     className="w-full bg-transparent outline-none placeholder:text-white/30 text-sm text-white/85"
                     placeholder="например: admin"
                     autoComplete="username"
                   />
                 </Field>
 
-                {/* Password */}
                 <Field
                   label="Пароль"
                   error={errors.password?.message}
@@ -480,15 +612,77 @@ export default function Login() {
                   }
                 >
                   <input
-                    {...register("password")}
+                    {...register("password", {
+                      onChange: () => apiError && setApiError(""),
+                    })}
                     type={show ? "text" : "password"}
                     className="w-full bg-transparent outline-none placeholder:text-white/30 text-sm text-white/85"
                     placeholder="••••••••"
-                    autoComplete="current-password"
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                    onKeyUp={(e) => setCapsLock(e.getModifierState("CapsLock"))}
+                    onKeyDown={(e) => setCapsLock(e.getModifierState("CapsLock"))}
                   />
                 </Field>
 
-                {/* Submit */}
+                <AnimatePresence>
+                  {capsLock && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      className="rounded-2xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+                    >
+                      Включён Caps Lock — проверь раскладку и регистр.
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {mode === "register" && (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm text-white/70">Надёжность пароля</div>
+                      <div className={cn("text-sm font-semibold", strength.text)}>
+                        {strength.label}
+                      </div>
+                    </div>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/8">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all duration-300",
+                          strength.cls,
+                          watchedPassword?.length >= 8
+                            ? "w-full"
+                            : watchedPassword?.length >= 6
+                              ? "w-2/3"
+                              : watchedPassword?.length > 0
+                                ? "w-1/3"
+                                : "w-0"
+                        )}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <label className="inline-flex items-center gap-2 text-sm text-white/65">
+                    <input
+                      type="checkbox"
+                      checked={remember}
+                      onChange={(e) => setRemember(e.target.checked)}
+                      className="h-4 w-4 rounded border-white/20 bg-transparent"
+                    />
+                    Запомнить логин
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={fillAdminDemo}
+                    className="text-sm text-cyan-200/85 hover:text-cyan-200 transition underline underline-offset-4 text-left"
+                  >
+                    Заполнить demo-доступ
+                  </button>
+                </div>
+
                 <motion.button
                   whileTap={{ scale: 0.99 }}
                   disabled={isSubmitting}
@@ -519,25 +713,10 @@ export default function Login() {
                   <span className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 hover:opacity-100 transition bg-[radial-gradient(120px_60px_at_50%_0%,rgba(255,255,255,0.65),transparent_70%)]" />
                 </motion.button>
 
-                <div className="text-xs text-white/45 text-center pt-1">
+                <div className="text-xs text-white/45 text-center pt-1 leading-relaxed">
                   {mode === "login"
-                    ? "Нажимая “Войти”, ты подтверждаешь доступ к запуску проверок и скачиванию отчётов."
-                    : "Нажимая “Зарегистрироваться”, ты создаёшь локальную учетную запись для работы с системой."}
-                </div>
-
-                <div className="pt-2 text-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setApiError("");
-                      setMode((m) => (m === "login" ? "register" : "login"));
-                    }}
-                    className="text-sm text-cyan-200/85 hover:text-cyan-200 transition underline underline-offset-4"
-                  >
-                    {mode === "login"
-                      ? "Нет аккаунта? Зарегистрироваться"
-                      : "Уже есть аккаунт? Войти"}
-                  </button>
+                    ? "После входа будут доступны запуск проверок, история прогонов и выгрузка отчётов."
+                    : "После регистрации будет создана локальная учётная запись для работы с системой."}
                 </div>
               </form>
 

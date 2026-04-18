@@ -201,8 +201,29 @@ body::-webkit-scrollbar {
 ---------------------------------------- */
 
 ::selection {
-  background: rgba(var(--cyan), 0.22);
-  color: rgb(var(--fg));
+  background: rgba(var(--cyan), 0.42);
+  color: rgb(var(--bg));
+  -webkit-text-fill-color: rgb(var(--bg));
+  text-shadow: none;
+}
+
+::-moz-selection {
+  background: rgba(var(--cyan), 0.42);
+  color: rgb(var(--bg));
+  text-shadow: none;
+}
+
+input::selection,
+textarea::selection {
+  background: rgba(var(--cyan), 0.42);
+  color: rgb(var(--bg));
+  -webkit-text-fill-color: rgb(var(--bg));
+}
+
+input::-moz-selection,
+textarea::-moz-selection {
+  background: rgba(var(--cyan), 0.42);
+  color: rgb(var(--bg));
 }
 
 :focus-visible {

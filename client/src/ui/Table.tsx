@@ -149,9 +149,9 @@ export function TableInner({
         TOKENS.table,
         zebra && TOKENS.zebra,
         stickyHeader &&
-          // sticky thead cells
-          "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 " +
-            "[&_thead_th]:backdrop-blur-xl [&_thead_th]:bg-slate-950/55",
+        // sticky thead cells
+        "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 " +
+        "[&_thead_th]:backdrop-blur-xl [&_thead_th]:bg-slate-950/55",
         className
       )}
       {...p}
@@ -346,8 +346,8 @@ export function SortTh({
     align === "left"
       ? "justify-start text-left"
       : align === "center"
-      ? "justify-center text-center"
-      : "justify-end text-right";
+        ? "justify-center text-center"
+        : "justify-end text-right";
 
   const Icon = dir === "asc" ? ChevronUp : dir === "desc" ? ChevronDown : null;
 
@@ -355,22 +355,24 @@ export function SortTh({
     <Th className={cn(className, align !== "left" && "text-center")}>
       <button
         type="button"
-        title={hint ?? "Sort"}
+        title={hint ?? "Сортировать"}
         onClick={onToggle}
         className={cn(
-          "group inline-flex items-center gap-2",
+          "group inline-flex w-full items-center gap-2",
           justify,
-          "w-full",
           "outline-none",
           "rounded-xl px-2 py-1 -mx-2 -my-1",
           "hover:bg-white/[0.05] active:bg-white/[0.07]",
           "focus-visible:ring-2 focus-visible:ring-cyan-300/25"
         )}
       >
-        <span className="truncate">{label}</span>
+        <span className="min-w-0 truncate">
+          {label}
+        </span>
+
         <span
           className={cn(
-            "ml-auto inline-flex items-center",
+            "ml-auto shrink-0 inline-flex items-center",
             "text-white/45 group-hover:text-white/70 transition-colors"
           )}
         >

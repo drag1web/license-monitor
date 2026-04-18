@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { getRunResults, type ResultRow } from "../api";
 
 import { Card } from "../ui/Card";
+import { useAuth } from "../auth/AuthContext";
+import { ViewerNotice } from "../components/ViewerNotice";
 import { cn } from "../ui/cn/cn";
 import {
   Table,
@@ -361,6 +363,9 @@ export default function RunDetails() {
   const { id } = useParams();
   const runId = useMemo(() => Number(id), [id]);
 
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   const [rows, setRows] = useState<ResultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -493,9 +498,9 @@ export default function RunDetails() {
 
   const heroSubtitle =
     headlineTone === "bad"
-      ? "В этом запуске есть дефициты или критичные позиции — проверь строки с HIGH."
+      ? "В этом запуске есть дефициты или критичные позиции — проверь строки с высоким риском."
       : headlineTone === "warn"
-        ? "Есть позиции, требующие внимания: истечения и/или средний риск."
+        ? "Есть позиции, требующие внимания: истекающие лицензии и/или средний риск."
         : headlineTone === "ok"
           ? "Критичных проблем не найдено. Можно спокойно жить."
           : "Запусти проверку и вернись сюда.";
@@ -513,6 +518,9 @@ export default function RunDetails() {
 
   return (
     <div className="space-y-4">
+      {!isAdmin && (
+        <ViewerNotice message="У вас нет прав на изменение данных. Доступен только просмотр результатов запуска." />
+      )}
       {/* HERO */}
       <Card
         className={cn(
@@ -558,7 +566,7 @@ export default function RunDetails() {
               </div>
 
               <div className="min-w-0">
-                <div className="text-xs text-white/50 tracking-wide">Run #{runId}</div>
+                <div className="text-xs text-white/50 tracking-wide">Запуск #{runId}</div>
                 <div className="mt-1 text-2xl font-semibold tracking-tight text-white/90">
                   {heroTitle}
                 </div>
@@ -610,7 +618,7 @@ export default function RunDetails() {
                 title="Сравнить этот запуск с предыдущим"
               >
                 <ArrowUpRight className="h-4 w-4 text-cyan-200/80" />
-                Diff
+                Сравнение
               </Link>
 
               <SoftButton
@@ -645,11 +653,10 @@ export default function RunDetails() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-            <StatCard label="Всего строк" value={formatInt(stats.total)} hint="Позиции в отчёте" tone="none" />
-            <StatCard label="HIGH" value={formatInt(stats.high)} hint="Дефицит / высокий риск" tone={stats.high > 0 ? "bad" : "ok"} />
-            <StatCard label="WARN" value={formatInt(stats.med)} hint="Скоро истекают / medium" tone={stats.med > 0 ? "warn" : "ok"} />
-            <StatCard label="Expires soon" value={formatInt(stats.expSoon)} hint="Скоро истекают" tone={stats.expSoon > 0 ? "warn" : "ok"} />
-            <StatCard label="Суммарный delta" value={formatInt(stats.sumDelta)} hint="licenses - demand" tone={stats.sumDelta < 0 ? "bad" : stats.sumDelta > 0 ? "ok" : "none"} />
+            <StatCard label="Высокий риск" value={formatInt(stats.high)} hint="Дефицит / высокий риск" tone={stats.high > 0 ? "bad" : "ok"} />
+            <StatCard label="Предупреждения" value={formatInt(stats.med)} hint="Истекающие / средний риск" tone={stats.med > 0 ? "warn" : "ok"} />
+            <StatCard label="Скоро истекают" value={formatInt(stats.expSoon)} hint="Лицензии с близким сроком окончания" tone={stats.expSoon > 0 ? "warn" : "ok"} />
+            <StatCard label="Суммарная дельта" value={formatInt(stats.sumDelta)} hint="licenses - demand" tone={stats.sumDelta < 0 ? "bad" : stats.sumDelta > 0 ? "ok" : "none"} />
           </div>
         </div>
       </Card>
@@ -691,7 +698,7 @@ export default function RunDetails() {
 
           <div className="flex flex-wrap gap-2 xl:ml-auto">
             <FilterPill
-              label="All"
+              label="Все"
               active={onlyRisk === "all"}
               onClick={() => setOnlyRisk("all")}
             />
@@ -714,7 +721,7 @@ export default function RunDetails() {
               onClick={() => setOnlyRisk("low")}
             />
             <TogglePill
-              label="Expires soon"
+              label="Скоро истекают"
               active={onlyExpSoon}
               onClick={() => setOnlyExpSoon((v) => !v)}
             />
@@ -736,7 +743,7 @@ export default function RunDetails() {
           <TableCaption
             title={`Результаты запуска #${runId}`}
             description="Сортируй по столбцам. Фильтруй риски, дельту и сроки."
-            right={<div className="text-[11px] text-white/45">{loading ? "Обновляю…" : "Ready"}</div>}
+            right={<div className="text-[11px] text-white/45">{loading ? "Обновляю…" : "Готово"}</div>}
           />
 
           {loading ? (
@@ -754,52 +761,52 @@ export default function RunDetails() {
                 <THead>
                   <tr>
                     <SortTh
-                      label="risk"
+                      label="риск"
                       dir={sortKey === "risk" ? sortDir : null}
                       onToggle={() => toggleSort("risk", "desc")}
-                      hint="Sort by derived risk"
+                      hint="Сортировать по вычисленному риску"
                     />
                     <SortTh
-                      label="product"
+                      label="продукт"
                       dir={sortKey === "product" ? sortDir : null}
                       onToggle={() => toggleSort("product", "asc")}
-                      hint="Sort by product"
+                      hint="Сортировать по продукту"
                     />
                     <SortTh
-                      label="license_type"
+                      label="тип лицензии"
                       dir={sortKey === "license_type" ? sortDir : null}
                       onToggle={() => toggleSort("license_type", "asc")}
-                      hint="Sort by license type"
+                      hint="Сортировать по типу лицензии"
                     />
                     <SortTh
-                      label="demand"
+                      label="потребность"
                       dir={sortKey === "demand" ? sortDir : null}
                       onToggle={() => toggleSort("demand", "desc")}
-                      hint="Sort by demand"
+                      hint="Сортировать по потребности"
                     />
                     <SortTh
-                      label="licenses"
+                      label="лицензии"
                       dir={sortKey === "licenses" ? sortDir : null}
                       onToggle={() => toggleSort("licenses", "desc")}
-                      hint="Sort by licenses"
+                      hint="Сортировать по количеству лицензий"
                     />
                     <SortTh
-                      label="delta"
+                      label="дельта"
                       dir={sortKey === "delta" ? sortDir : null}
                       onToggle={() => toggleSort("delta", "asc")}
-                      hint="Sort by delta"
+                      hint="Сортировать по дельте"
                     />
                     <SortTh
-                      label="expires_soon"
+                      label="скоро истекают"
                       dir={sortKey === "expires_soon" ? sortDir : null}
                       onToggle={() => toggleSort("expires_soon", "desc")}
-                      hint="Sort by expires soon"
+                      hint="Сортировать по признаку истечения"
                     />
                     <SortTh
-                      label="nearest_end_date"
+                      label="ближайшая дата окончания"
                       dir={sortKey === "nearest_end_date" ? sortDir : null}
                       onToggle={() => toggleSort("nearest_end_date", "asc")}
-                      hint="Sort by nearest end date"
+                      hint="Сортировать по ближайшей дате окончания"
                     />
                   </tr>
                 </THead>
@@ -853,7 +860,7 @@ export default function RunDetails() {
                           {expSoon ? (
                             <span className="inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 text-[12px] font-semibold border border-amber-300/20 bg-amber-500/10 text-amber-100">
                               <TimerReset className="h-4 w-4" />
-                              YES
+                              Да
                             </span>
                           ) : (
                             <span className="text-white/55">—</span>

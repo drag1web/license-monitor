@@ -7,7 +7,22 @@ import { fileURLToPath } from "node:url";
 import session from "express-session";
 import bcrypt from "bcrypt";
 
-import { initDatabase } from "./db/database.js";
+import {
+  initDatabase,
+  listLicensesRegistry,
+  upsertLicenseRegistry,
+  removeLicenseRegistry,
+  listProducts,
+  listMappingRules,
+  createMappingRule,
+  removeMappingRule,
+  listImports,
+  type LicenseRegistryInput,
+  type MappingRuleInput,
+} from "./db/database.js";
+
+import { migrateLicensesJsonToRegistry } from "./db/migrateLicensesRegistry.js";
+
 import {
   getLastRuns,
   getRunResults,
@@ -50,6 +65,11 @@ function resolveConfigPaths(config: Config): Config {
     xlsxReportPath: path.resolve(root, config.xlsxReportPath),
     dbPath: path.resolve(root, config.dbPath),
     runsCsvPath: path.resolve(root, config.runsCsvPath),
+    ...(config.legacyLicensesJsonPath
+      ? {
+        legacyLicensesJsonPath: path.resolve(root, config.legacyLicensesJsonPath),
+      }
+      : {}),
   };
 }
 
@@ -93,6 +113,24 @@ async function main() {
   const rawConfig = await loadConfig();
   const config = resolveConfigPaths(rawConfig);
   const db = initDatabase(config.dbPath);
+
+  if (config.legacyLicensesJsonPath) {
+    try {
+      const result = await migrateLicensesJsonToRegistry(db, config.legacyLicensesJsonPath);
+
+      if (result.migrated > 0 || result.skipped > 0) {
+        console.log("LICENSES MIGRATION:");
+        console.log(`  migrated: ${result.migrated}`);
+        console.log(`  skipped: ${result.skipped}`);
+        if (result.backupPath) {
+          console.log(`  backup:   ${result.backupPath}`);
+        }
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("LICENSES MIGRATION ERROR:", msg);
+    }
+  }
 
   const app = express();
 
@@ -256,6 +294,146 @@ async function main() {
 
   app.post("/api/auth/logout", (req: AuthedReq, res: Response) => {
     req.session.destroy(() => res.json({ ok: true }));
+  });
+
+  app.get("/api/licenses", requireAuth, (_req: Request, res: Response) => {
+    try {
+      const rows = listLicensesRegistry(db);
+      res.json(rows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.post("/api/licenses/upsert", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
+    const body = req.body as Partial<LicenseRegistryInput>;
+
+    if (!body?.id) {
+      res.status(400).json({ ok: false, error: "id required" });
+      return;
+    }
+
+    if (!body?.product?.trim()) {
+      res.status(400).json({ ok: false, error: "product required" });
+      return;
+    }
+
+    if (!body?.license_type) {
+      res.status(400).json({ ok: false, error: "license_type required" });
+      return;
+    }
+
+    try {
+      const row = upsertLicenseRegistry(db, {
+        id: String(body.id),
+        product: String(body.product).trim(),
+        vendor: body.vendor ? String(body.vendor) : "",
+        license_type: body.license_type,
+        seats_total: Number(body.seats_total) || 0,
+        seats_used: Number(body.seats_used) || 0,
+        starts_at: body.starts_at ? String(body.starts_at) : "",
+        expires_at: body.expires_at ? String(body.expires_at) : "",
+        note: body.note ? String(body.note) : "",
+      });
+
+      res.json(row);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.delete("/api/licenses/:id", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+    const id = String(req.params.id || "").trim();
+
+    if (!id) {
+      res.status(400).json({ ok: false, error: "id required" });
+      return;
+    }
+
+    try {
+      const out = removeLicenseRegistry(db, id);
+      res.json(out);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.get("/api/products", requireAuth, (_req: Request, res: Response) => {
+    try {
+      const rows = listProducts(db);
+      res.json(rows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+    app.get("/api/mapping-rules", requireAuth, (_req: Request, res: Response) => {
+    try {
+      const rows = listMappingRules(db);
+      res.json(rows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.post("/api/mapping-rules", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
+    const body = req.body as Partial<MappingRuleInput>;
+
+    if (!body?.pattern?.trim()) {
+      res.status(400).json({ ok: false, error: "pattern required" });
+      return;
+    }
+
+    if (!body?.canonical_product?.trim()) {
+      res.status(400).json({ ok: false, error: "canonical_product required" });
+      return;
+    }
+
+    try {
+      const row = createMappingRule(db, {
+        pattern: String(body.pattern).trim(),
+        canonical_product: String(body.canonical_product).trim(),
+        product_id: Number.isFinite(Number(body.product_id)) ? Number(body.product_id) : undefined,
+        match_type: body.match_type ? String(body.match_type) : "contains",
+      });
+
+      res.json(row);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.delete("/api/mapping-rules/:id", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(400).json({ ok: false, error: "bad id" });
+      return;
+    }
+
+    try {
+      const out = removeMappingRule(db, id);
+      res.json(out);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+    app.get("/api/imports", requireAuth, (_req: Request, res: Response) => {
+    try {
+      const rows = listImports(db);
+      res.json(rows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
   });
 
   // ---------------- API ----------------

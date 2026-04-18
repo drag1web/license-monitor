@@ -1,10 +1,8 @@
 const { app, BrowserWindow, globalShortcut, ipcMain } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
-const { createLicensesRepo } = require("./licensesRepo.cjs");
 
 let win;
-let licensesRepo;
 
 const preloadPath = path.join(__dirname, "preload.cjs");
 console.log("PRELOAD PATH:", preloadPath);
@@ -54,17 +52,7 @@ ipcMain.handle("win:maximize", () => {
 ipcMain.handle("win:close", () => win?.close());
 ipcMain.handle("win:isMaximized", () => !!win?.isMaximized());
 
-function ensureRepo() {
-  if (!licensesRepo) throw new Error("licensesRepo not initialized");
-  return licensesRepo;
-}
-
-ipcMain.handle("licenses:list", async () => ensureRepo().list());
-ipcMain.handle("licenses:upsert", async (_e, row) => ensureRepo().upsert(row));
-ipcMain.handle("licenses:remove", async (_e, id) => ensureRepo().remove(id));
-
 app.whenReady().then(() => {
-  licensesRepo = createLicensesRepo(app.getPath("userData"));
   createWindow();
 
   app.on("activate", () => {

@@ -16,7 +16,7 @@ function useWindowMaximized(pollMs = 800) {
   const [max, setMax] = useState(false);
 
   async function refresh() {
-    const v = await window.electron?.window.isMaximized?.();
+    const v = await window.electron?.window?.isMaximized?.();
     if (typeof v === "boolean") setMax(v);
   }
 
@@ -212,7 +212,7 @@ export function TopBar({
           <div className="flex items-center gap-1.5">
             <button
               className={cn(windowBtnBase, windowBtnIcon)}
-              onClick={() => window.electron?.window.minimize?.()}
+              onClick={() => window.electron?.window?.minimize?.()}
               title="Minimize"
             >
               <Minus className="h-4 w-4" />
@@ -221,7 +221,7 @@ export function TopBar({
             <button
               className={cn(windowBtnBase, windowBtnIcon)}
               onClick={async () => {
-                await window.electron?.window.maximize?.();
+                await window.electron?.window?.maximize?.();
                 await refresh();
               }}
               title={maximizeTitle}
@@ -231,7 +231,7 @@ export function TopBar({
 
             <button
               className={cn(closeBtn, windowBtnIcon)}
-              onClick={() => window.electron?.window.close?.()}
+              onClick={() => window.electron?.window?.close?.()}
               title="Close"
             >
               <X className="h-4 w-4" />

@@ -6,6 +6,7 @@ import { Button } from "../ui/Button";
 
 import { getLicenses, upsertLicense, removeLicense, type LicenseRow } from "../api";
 import { useToast } from "../ui/toast";
+import { ViewerNotice } from "../components/ViewerNotice";
 import { useAuth } from "../auth/AuthContext";
 
 import { ConfirmDialog } from "../ui/modal/ConfirmDialog";
@@ -725,6 +726,10 @@ export default function Licenses() {
         onCancel={confirm.cancel}
         onConfirm={confirm.confirm}
       />
+
+      {!isAdmin && (
+        <ViewerNotice message="У вас нет прав на добавление, редактирование и удаление лицензий. Реестр доступен только для просмотра." />
+      )}
 
       {/* EDITOR */}
       {isAdmin && (

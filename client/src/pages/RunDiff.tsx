@@ -17,6 +17,8 @@ import {
 
 import { cn } from "../ui/cn/cn";
 import { Card } from "../ui/Card";
+import { useAuth } from "../auth/AuthContext";
+import { ViewerNotice } from "../components/ViewerNotice";
 import {
   Table,
   TableInner,
@@ -87,12 +89,12 @@ function Pill({
 function KindPill({ kind }: { kind: DiffItem["kind"] }) {
   const p =
     kind === "new"
-      ? { t: "NEW", cls: "border-cyan-300/20 bg-cyan-500/10 text-cyan-100" }
+      ? { t: "НОВОЕ", cls: "border-cyan-300/20 bg-cyan-500/10 text-cyan-100" }
       : kind === "removed"
-      ? { t: "REMOVED", cls: "border-emerald-300/20 bg-emerald-500/10 text-emerald-100" }
-      : kind === "changed"
-      ? { t: "CHANGED", cls: "border-amber-300/20 bg-amber-500/10 text-amber-100" }
-      : { t: "—", cls: "border-white/10 bg-white/[0.03] text-white/70" };
+        ? { t: "УДАЛЕНО", cls: "border-emerald-300/20 bg-emerald-500/10 text-emerald-100" }
+        : kind === "changed"
+          ? { t: "ИЗМЕНЕНО", cls: "border-amber-300/20 bg-amber-500/10 text-amber-100" }
+          : { t: "—", cls: "border-white/10 bg-white/[0.03] text-white/70" };
 
   return (
     <span className={cn("inline-flex items-center rounded-2xl px-3 py-1.5 text-[12px] font-semibold border", p.cls)}>
@@ -135,6 +137,9 @@ export default function RunDiff() {
   const toast = useToast();
   const { id } = useParams();
   const runId = useMemo(() => Number(id), [id]);
+
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -317,6 +322,9 @@ export default function RunDiff() {
 
   return (
     <div className="space-y-4">
+      {!isAdmin && (
+        <ViewerNotice message="У вас нет прав на изменение данных. Доступен только просмотр сравнений запусков." />
+      )}
       {/* Header / Hero */}
       <Card
         className={cn(
@@ -346,18 +354,18 @@ export default function RunDiff() {
                 title="Назад к деталям запуска"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Back
+                Назад
               </Link>
 
               <div className="min-w-0">
-                <div className="text-xs text-white/50">Diff</div>
+                <div className="text-xs text-white/50">Сравнение запусков</div>
                 <div className="mt-1 text-2xl font-semibold text-white/90 tracking-tight">
-                  Run #{runId} — сравнение с прошлым
+                  Запуск #{runId} — сравнение с предыдущим
                 </div>
 
                 <div className="mt-1 text-sm text-white/55 max-w-[80ch]">
                   Здесь видно, <span className="text-white/80 font-semibold">что именно изменилось</span> между двумя запусками:
-                  новые проблемы, улучшения, ухудшения и изменения expires.
+                  новые проблемы, улучшения, ухудшения и изменения по срокам истечения.
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -365,23 +373,23 @@ export default function RunDiff() {
                     {headerTone === "bad"
                       ? "Есть ухудшения"
                       : headerTone === "warn"
-                      ? "Есть новые риски"
-                      : headerTone === "ok"
-                      ? "Стабильно / улучшения"
-                      : "Нет данных"}
+                        ? "Есть новые риски"
+                        : headerTone === "ok"
+                          ? "Стабильно / улучшения"
+                          : "Нет данных"}
                   </Pill>
 
                   {now && (
                     <span className="inline-flex items-center gap-2 text-[12px] text-white/45">
                       <Clock className="h-4 w-4" />
-                      now: #{now.id} • {String(now.run_at)}
+                      текущий: #{now.id} • {String(now.run_at)}
                     </span>
                   )}
 
                   {prev && (
                     <span className="inline-flex items-center gap-2 text-[12px] text-white/45">
                       <Clock className="h-4 w-4" />
-                      prev: #{prev.id} • {String(prev.run_at)}
+                      предыдущий: #{prev.id} • {String(prev.run_at)}
                     </span>
                   )}
                 </div>
@@ -397,7 +405,7 @@ export default function RunDiff() {
                 }
                 title="Пересчитать diff"
               >
-                Recompute
+                Пересчитать
               </SoftButton>
 
               <SoftButton
@@ -406,7 +414,7 @@ export default function RunDiff() {
                 leftIcon={<Download className="h-4 w-4" />}
                 title="Экспортировать текущий diff в CSV"
               >
-                Export CSV
+                Экспорт CSV
               </SoftButton>
 
               {prev && (
@@ -421,7 +429,7 @@ export default function RunDiff() {
                   )}
                   title="Открыть предыдущий запуск"
                 >
-                  Prev run #{prev.id}
+                  Предыдущий запуск #{prev.id}
                   <ArrowUpRight className="h-4 w-4 text-white/55" />
                 </Link>
               )}
@@ -435,13 +443,13 @@ export default function RunDiff() {
               "p-4"
             )}
           >
-            <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+            <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2 text-white/70">
                 <Filter className="h-4 w-4" />
                 <div className="text-sm font-semibold">Фильтры</div>
               </div>
 
-              <div className="flex-1 flex flex-col md:flex-row gap-2">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.2fr)_220px_280px_120px]">
                 {/* Search */}
                 <div
                   className={cn(
@@ -450,12 +458,12 @@ export default function RunDiff() {
                     "focus-within:border-cyan-200/30 focus-within:shadow-[0_0_0_4px_rgba(34,211,238,0.10)]"
                   )}
                 >
-                  <Search className="h-4 w-4 text-white/45" />
+                  <Search className="h-4 w-4 shrink-0 text-white/45" />
                   <input
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
-                    placeholder="Поиск: product / license_type / risk…"
-                    className="w-full bg-transparent outline-none text-sm text-white/85 placeholder:text-white/35"
+                    placeholder="Поиск: продукт / тип лицензии / риск…"
+                    className="w-full min-w-0 bg-transparent outline-none text-sm text-white/85 placeholder:text-white/35"
                   />
                 </div>
 
@@ -469,52 +477,51 @@ export default function RunDiff() {
                     "outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
                   )}
                 >
-                  <option value="all">All kinds</option>
-                  <option value="new">NEW</option>
-                  <option value="changed">CHANGED</option>
-                  <option value="removed">REMOVED</option>
+                  <option value="all">Все типы</option>
+                  <option value="new">Новые</option>
+                  <option value="changed">Изменённые</option>
+                  <option value="removed">Удалённые</option>
                 </select>
 
                 {/* Sort */}
-                <div className="flex gap-2">
-                  <select
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value as ScoreSort)}
-                    className={cn(
-                      "rounded-2xl border px-3.5 py-2 text-sm",
-                      "bg-white/[0.03] border-white/[0.08] text-white/85",
-                      "outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
-                    )}
-                  >
-                    <option value="score">Sort: Score</option>
-                    <option value="delta">Sort: Δdelta</option>
-                    <option value="demand">Sort: Δdemand</option>
-                    <option value="licenses">Sort: Δlicenses</option>
-                  </select>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as ScoreSort)}
+                  className={cn(
+                    "rounded-2xl border px-3.5 py-2 text-sm",
+                    "bg-white/[0.03] border-white/[0.08] text-white/85",
+                    "outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
+                  )}
+                >
+                  <option value="score">Сортировка: важность</option>
+                  <option value="delta">Сортировка: Δ дельта</option>
+                  <option value="demand">Сортировка: Δ потребность</option>
+                  <option value="licenses">Сортировка: Δ лицензии</option>
+                </select>
 
-                  <button
-                    className={cn(
-                      "rounded-2xl border px-3.5 py-2",
-                      "bg-white/[0.03] border-white/[0.08] text-white/85 hover:bg-white/[0.06]",
-                      "transition outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
-                    )}
-                    onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
-                    title="Toggle sort direction"
-                  >
-                    {sortDir === "desc" ? (
-                      <span className="inline-flex items-center gap-2 text-sm font-semibold">
-                        desc <ChevronDown className="h-4 w-4" />
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-2 text-sm font-semibold">
-                        asc <ChevronUp className="h-4 w-4" />
-                      </span>
-                    )}
-                  </button>
-                </div>
+                {/* Sort direction */}
+                <button
+                  className={cn(
+                    "rounded-2xl border px-3.5 py-2",
+                    "bg-white/[0.03] border-white/[0.08] text-white/85 hover:bg-white/[0.06]",
+                    "transition outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
+                  )}
+                  onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+                  title="Сменить направление сортировки"
+                  type="button"
+                >
+                  {sortDir === "desc" ? (
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                      убыв. <ChevronDown className="h-4 w-4" />
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold">
+                      возр. <ChevronUp className="h-4 w-4" />
+                    </span>
+                  )}
+                </button>
               </div>
 
-              {/* toggles */}
               <div className="flex flex-wrap items-center gap-2">
                 <Toggle
                   on={onlyWorsened}
@@ -522,7 +529,7 @@ export default function RunDiff() {
                     setOnlyWorsened(v);
                     if (v) setOnlyImproved(false);
                   }}
-                  label="Only worsened"
+                  label="Только ухудшения"
                   tone="bad"
                 />
                 <Toggle
@@ -531,13 +538,13 @@ export default function RunDiff() {
                     setOnlyImproved(v);
                     if (v) setOnlyWorsened(false);
                   }}
-                  label="Only improved"
+                  label="Только улучшения"
                   tone="ok"
                 />
                 <Toggle
                   on={expiresBecameYes}
                   setOn={setExpiresBecameYes}
-                  label="Expires became YES"
+                  label="Стало истекающим"
                   tone="warn"
                 />
               </div>
@@ -545,12 +552,12 @@ export default function RunDiff() {
 
             {diff && (
               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-2">
-                <MiniStat label="NEW" value={diff.counts.newRows} tone={diff.counts.newRows ? "warn" : "ok"} />
-                <MiniStat label="REMOVED" value={diff.counts.removedRows} tone="ok" />
-                <MiniStat label="WORSE" value={diff.counts.worsened} tone={diff.counts.worsened ? "bad" : "ok"} />
-                <MiniStat label="IMPROVE" value={diff.counts.improved} tone="ok" />
-                <MiniStat label="NEW expires" value={diff.counts.expiresNew} tone={diff.counts.expiresNew ? "warn" : "ok"} />
-                <MiniStat label="Showing" value={sorted.length} tone="none" />
+                <MiniStat label="Новые" value={diff.counts.newRows} tone={diff.counts.newRows ? "warn" : "ok"} />
+                <MiniStat label="Удалённые" value={diff.counts.removedRows} tone="ok" />
+                <MiniStat label="Ухудшения" value={diff.counts.worsened} tone={diff.counts.worsened ? "bad" : "ok"} />
+                <MiniStat label="Улучшения" value={diff.counts.improved} tone="ok" />
+                <MiniStat label="Новые истечения" value={diff.counts.expiresNew} tone={diff.counts.expiresNew ? "warn" : "ok"} />
+                <MiniStat label="Показано" value={sorted.length} tone="none" />
               </div>
             )}
           </div>
@@ -561,7 +568,7 @@ export default function RunDiff() {
       <Card className="p-0 rounded-3xl overflow-hidden border border-white/[0.08] bg-white/[0.02]">
         <Table>
           <TableCaption
-            title="Diff items"
+            title="Элементы сравнения"
             description="Строки, которые появились / исчезли / изменились. Отсортировано и отфильтровано."
             right={
               <div className="text-[11px] text-white/45">
@@ -590,12 +597,12 @@ export default function RunDiff() {
                     "transition shadow-[0_14px_55px_rgba(0,0,0,0.35)]"
                   )}
                 >
-                  На Dashboard <ArrowUpRight className="h-4 w-4" />
+                  На главную <ArrowUpRight className="h-4 w-4" />
                 </Link>
               }
             />
           ) : !diff ? (
-            <TableEmpty title="Нет diff" description="Не удалось построить diff." />
+            <TableEmpty title="Нет сравнения" description="Не удалось построить сравнение." />
           ) : sorted.length === 0 ? (
             <TableEmpty
               title="Пусто"
@@ -608,7 +615,7 @@ export default function RunDiff() {
                     setOnlyWorsened(false);
                     setOnlyImproved(false);
                     setExpiresBecameYes(false);
-                    toast.push({ tone: "info", title: "Фильтры", message: "Сбросил фильтры." });
+                    toast.push({ tone: "info", title: "Фильтры", message: "Фильтры сброшены." });
                   }}
                   leftIcon={<Filter className="h-4 w-4" />}
                 >
@@ -621,13 +628,13 @@ export default function RunDiff() {
               <TableInner stickyHeader density="comfortable">
                 <THead>
                   <tr>
-                    <SortTh label="kind" dir={null} />
-                    <SortTh label="product" dir={null} />
-                    <SortTh label="license_type" dir={null} />
-                    <SortTh label="risk" dir={null} />
-                    <SortTh label="delta" dir={null} />
-                    <SortTh label="expires" dir={null} />
-                    <SortTh label="demand / licenses" dir={null} />
+                    <SortTh label="тип" dir={null} />
+                    <SortTh label="продукт" dir={null} />
+                    <SortTh label="тип лицензии" dir={null} />
+                    <SortTh label="риск" dir={null} />
+                    <SortTh label="дельта" dir={null} />
+                    <SortTh label="истечение" dir={null} />
+                    <SortTh label="потребность / лицензии" dir={null} />
                   </tr>
                 </THead>
 
@@ -661,8 +668,8 @@ export default function RunDiff() {
                             x.delta_now < x.delta_prev
                               ? "text-rose-200"
                               : x.delta_now > x.delta_prev
-                              ? "text-emerald-200"
-                              : "text-white/75"
+                                ? "text-emerald-200"
+                                : "text-white/75"
                           )}
                         >
                           {x.delta_prev} → {x.delta_now}
@@ -672,9 +679,9 @@ export default function RunDiff() {
                           {x.expires_prev === x.expires_now ? (
                             <span className="text-white/55">—</span>
                           ) : x.expires_now ? (
-                            <span className="text-amber-200 font-semibold">became YES</span>
+                            <span className="text-amber-200 font-semibold">стало: да</span>
                           ) : (
-                            <span className="text-emerald-200 font-semibold">became NO</span>
+                            <span className="text-emerald-200 font-semibold">стало: нет</span>
                           )}
                         </Td>
 
@@ -723,10 +730,10 @@ function Toggle({
           ? tone === "bad"
             ? "border-rose-300/25 bg-rose-500/12 text-rose-100"
             : tone === "warn"
-            ? "border-amber-300/25 bg-amber-500/12 text-amber-100"
-            : tone === "ok"
-            ? "border-emerald-300/25 bg-emerald-500/12 text-emerald-100"
-            : "border-cyan-300/25 bg-cyan-500/12 text-cyan-100"
+              ? "border-amber-300/25 bg-amber-500/12 text-amber-100"
+              : tone === "ok"
+                ? "border-emerald-300/25 bg-emerald-500/12 text-emerald-100"
+                : "border-cyan-300/25 bg-cyan-500/12 text-cyan-100"
           : "border-white/[0.08] bg-white/[0.03] text-white/75 hover:bg-white/[0.06]",
         "transition outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
       )}
@@ -750,10 +757,10 @@ function MiniStat({
     tone === "bad"
       ? "border-rose-300/20 bg-rose-500/10 text-rose-100"
       : tone === "warn"
-      ? "border-amber-300/20 bg-amber-500/10 text-amber-100"
-      : tone === "ok"
-      ? "border-emerald-300/20 bg-emerald-500/10 text-emerald-100"
-      : "border-white/10 bg-white/[0.03] text-white/70";
+        ? "border-amber-300/20 bg-amber-500/10 text-amber-100"
+        : tone === "ok"
+          ? "border-emerald-300/20 bg-emerald-500/10 text-emerald-100"
+          : "border-white/10 bg-white/[0.03] text-white/70";
 
   return (
     <div className={cn("rounded-2xl border px-4 py-3", cls)}>

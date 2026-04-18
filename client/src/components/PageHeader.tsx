@@ -25,36 +25,36 @@ type Tab = {
 const TABS: Tab[] = [
   {
     to: "/",
-    label: "Dashboard",
+    label: "Главная",
     icon: <Home className="h-4 w-4" />,
     match: (p) => p === "/" || p.startsWith("/dashboard"),
   },
   {
     to: "/runs",
-    label: "Runs",
+    label: "Запуски",
     icon: <History className="h-4 w-4" />,
     match: (p) => p.startsWith("/runs"),
   },
   {
     to: "/licenses",
-    label: "Licenses",
+    label: "Лицензии",
     icon: <KeyRound className="h-4 w-4" />,
     match: (p) => p.startsWith("/licenses"),
   },
   {
     to: "/settings",
-    label: "Settings",
+    label: "Настройки",
     icon: <SettingsIcon className="h-4 w-4" />,
     match: (p) => p.startsWith("/settings"),
   },
 ];
 
 const BREAD_MAP: Record<string, string> = {
-  runs: "Runs",
-  diff: "Diff",
-  settings: "Settings",
-  licenses: "Licenses",
-  login: "Login",
+  runs: "Запуски",
+  diff: "Сравнение",
+  settings: "Настройки",
+  licenses: "Лицензии",
+  login: "Вход",
 };
 
 function humanizeSegment(seg: string) {
@@ -298,7 +298,7 @@ export function PageHeader({
                     className="inline-flex items-center gap-1 rounded-xl px-2 py-1 hover:bg-white/[0.05] hover:text-white/70 transition"
                   >
                     <Home className="h-3.5 w-3.5" />
-                    <span>Home</span>
+                    <span>Главная</span>
                   </Link>
 
                   {parts.map((p, idx) => (
@@ -336,7 +336,7 @@ export function PageHeader({
             <div className="hidden xl:flex flex-col items-end gap-3">
 
               <div className="flex flex-wrap items-center gap-2 text-[12px] text-white/45">
-                <span className="hidden 2xl:inline">Quick:</span>
+                <span className="hidden 2xl:inline">Быстрые действия:</span>
 
                 <Link
                   to="/runs"
@@ -346,10 +346,10 @@ export function PageHeader({
                     "hover:bg-white/[0.06] hover:border-white/[0.12]",
                     "transition"
                   )}
-                  title="Открыть Runs"
+                  title="Открыть раздел запусков"
                 >
                   <ArrowUpRight className="h-4 w-4 text-white/40" />
-                  <span>Open Runs</span>
+                  <span>Открыть запуски</span>
                 </Link>
 
                 <Link
@@ -363,7 +363,7 @@ export function PageHeader({
                   title="Открыть Licenses"
                 >
                   <ArrowUpRight className="h-4 w-4 text-white/40" />
-                  <span>Open Licenses</span>
+                  <span>Открыть лицензии</span>
                 </Link>
               </div>
             </div>

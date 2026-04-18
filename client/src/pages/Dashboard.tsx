@@ -12,6 +12,7 @@ import { computeRunDiff, diffScore } from "../ui/diff/runDiff";
 import { Card } from "../ui/Card";
 import { cn } from "../ui/cn/cn";
 import { useToast } from "../ui/toast";
+import { ViewerNotice } from "../components/ViewerNotice";
 import { useAuth } from "../auth/AuthContext";
 import {
   Table,
@@ -200,31 +201,31 @@ function SoftButton(props: {
   const v =
     variant === "primary"
       ? [
-          "border",
-          SOFT_BORDER_STRONG,
-          "bg-[linear-gradient(to_bottom,rgba(34,211,238,0.16),rgba(34,211,238,0.05))]",
-          "text-[rgb(var(--fg))]",
-          "hover:bg-[linear-gradient(to_bottom,rgba(34,211,238,0.22),rgba(34,211,238,0.08))]",
-          "shadow-[0_14px_42px_rgba(34,211,238,0.10)]",
-        ].join(" ")
+        "border",
+        SOFT_BORDER_STRONG,
+        "bg-[linear-gradient(to_bottom,rgba(34,211,238,0.16),rgba(34,211,238,0.05))]",
+        "text-[rgb(var(--fg))]",
+        "hover:bg-[linear-gradient(to_bottom,rgba(34,211,238,0.22),rgba(34,211,238,0.08))]",
+        "shadow-[0_14px_42px_rgba(34,211,238,0.10)]",
+      ].join(" ")
       : variant === "danger"
         ? [
-            "border",
-            SOFT_BORDER,
-            "bg-[linear-gradient(to_bottom,rgba(244,63,94,0.14),rgba(244,63,94,0.05))]",
-            "text-[rgb(var(--fg))]",
-            "hover:bg-[linear-gradient(to_bottom,rgba(244,63,94,0.20),rgba(244,63,94,0.08))]",
-            "shadow-[0_14px_42px_rgba(244,63,94,0.10)]",
-          ].join(" ")
+          "border",
+          SOFT_BORDER,
+          "bg-[linear-gradient(to_bottom,rgba(244,63,94,0.14),rgba(244,63,94,0.05))]",
+          "text-[rgb(var(--fg))]",
+          "hover:bg-[linear-gradient(to_bottom,rgba(244,63,94,0.20),rgba(244,63,94,0.08))]",
+          "shadow-[0_14px_42px_rgba(244,63,94,0.10)]",
+        ].join(" ")
         : [
-            "border",
-            SOFT_BORDER,
-            GLASS_BG,
-            "text-[rgba(var(--fg),0.86)]",
-            "hover:bg-[rgba(var(--card),0.38)]",
-            SOFT_BORDER_HOVER,
-            SOFT_SHADOW,
-          ].join(" ");
+          "border",
+          SOFT_BORDER,
+          GLASS_BG,
+          "text-[rgba(var(--fg),0.86)]",
+          "hover:bg-[rgba(var(--card),0.38)]",
+          SOFT_BORDER_HOVER,
+          SOFT_SHADOW,
+        ].join(" ");
 
   return (
     <button
@@ -880,15 +881,7 @@ export default function Dashboard() {
           )}
 
           {!isAdmin && (
-            <div className={cn("rounded-2xl px-4 py-3", GLASS_BG_SOFT)}>
-              <div className="text-sm font-semibold text-[rgba(var(--fg),0.86)]">
-                Режим просмотра
-              </div>
-              <div className="mt-1 text-xs text-[rgba(var(--fg),0.56)]">
-                У вас нет прав на запуск новых проверок. Доступен просмотр истории
-                и скачивание отчётов.
-              </div>
-            </div>
+            <ViewerNotice message="У вас нет прав на запуск новых проверок и изменение данных. Доступен только просмотр истории и отчётов." />
           )}
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">

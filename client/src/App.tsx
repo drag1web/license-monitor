@@ -32,6 +32,14 @@ function ProtectedShell({
   );
 }
 
+function LoginShell() {
+  return (
+    <AppLayout>
+      <Login />
+    </AppLayout>
+  );
+}
+
 function AuthedRoutes() {
   return (
     <AppLayout>
@@ -40,7 +48,7 @@ function AuthedRoutes() {
           <Route
             path="/"
             element={
-              <ProtectedShell title="Dashboard">
+              <ProtectedShell title="Обзор">
                 <Dashboard />
               </ProtectedShell>
             }
@@ -49,7 +57,7 @@ function AuthedRoutes() {
           <Route
             path="/runs"
             element={
-              <ProtectedShell title="Runs">
+              <ProtectedShell title="Запуски">
                 <Runs />
               </ProtectedShell>
             }
@@ -58,7 +66,7 @@ function AuthedRoutes() {
           <Route
             path="/runs/:id"
             element={
-              <ProtectedShell title="Run details">
+              <ProtectedShell title="Детали запусков">
                 <RunDetails />
               </ProtectedShell>
             }
@@ -67,7 +75,7 @@ function AuthedRoutes() {
           <Route
             path="/runs/:id/diff"
             element={
-              <ProtectedShell title="Diff">
+              <ProtectedShell title="Сравнение запусков">
                 <RunDiff />
               </ProtectedShell>
             }
@@ -77,7 +85,7 @@ function AuthedRoutes() {
           <Route
             path="/licenses"
             element={
-              <ProtectedShell title="Licenses registry">
+              <ProtectedShell title="Реестр лицензий">
                 <Licenses />
               </ProtectedShell>
             }
@@ -86,7 +94,7 @@ function AuthedRoutes() {
           <Route
             path="/settings"
             element={
-              <ProtectedShell title="Settings">
+              <ProtectedShell title="Настройки">
                 <Settings />
               </ProtectedShell>
             }
@@ -106,7 +114,7 @@ export default function App() {
   return (
     <Routes>
       {/* Public */}
-      <Route path="/login" element={<Login />} />
+      <Route path="/login" element={<LoginShell />} />
 
       {/* Private */}
       <Route

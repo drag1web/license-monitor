@@ -8,5 +8,6 @@
   "badRowsPath": "data/bad_rows.csv",
   "dbPath": "data/history.db",
   "runsCsvPath": "data/runs.csv",
+  "legacyLicensesJsonPath": "C:/Users/drag1/AppData/Roaming/license-monitor/licenses.json",
   "expiresDays": 30
 }
