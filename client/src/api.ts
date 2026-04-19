@@ -61,6 +61,51 @@ export type ImportRow = {
   imported_at: string;
 };
 
+export type ProductRow = {
+  id: number;
+  name: string;
+  vendor: string | null;
+  category: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type CreateProductInput = {
+  name: string;
+  vendor?: string;
+  category?: string;
+};
+
+export type UpdateProductInput = {
+  name: string;
+  vendor?: string;
+  category?: string;
+};
+
+export type MappingRuleRow = {
+  id: number;
+  pattern: string;
+  match_type: string | null;
+  product_id: number | null;
+  canonical_product?: string | null;
+  product_name?: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type CreateMappingRuleInput = {
+  pattern: string;
+  canonical_product: string;
+  product_id?: number;
+  match_type?: string;
+};
+
+export type UpdateMappingRuleInput = {
+  pattern: string;
+  canonical_product: string;
+  product_id?: number;
+  match_type?: string;
+};
 
 /* ------------------------------------------
  * HTTP helper (sessions-safe)
@@ -209,6 +254,54 @@ export function cleanupImportsKeepLast(keepLast: number) {
 
 export function getImports(): Promise<ImportRow[]> {
   return j<ImportRow[]>("/api/imports");
+}
+
+export function getProducts(): Promise<ProductRow[]> {
+  return j<ProductRow[]>("/api/products");
+}
+
+export function createProduct(input: CreateProductInput): Promise<ProductRow> {
+  return j<ProductRow>("/api/products", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateProduct(id: number, input: UpdateProductInput): Promise<ProductRow> {
+  return j<ProductRow>(`/api/products/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteProduct(id: number): Promise<{ ok: boolean }> {
+  return j<{ ok: boolean }>(`/api/products/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function getMappingRules(): Promise<MappingRuleRow[]> {
+  return j<MappingRuleRow[]>("/api/mapping-rules");
+}
+
+export function createMappingRule(input: CreateMappingRuleInput): Promise<MappingRuleRow> {
+  return j<MappingRuleRow>("/api/mapping-rules", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateMappingRule(id: number, input: UpdateMappingRuleInput): Promise<MappingRuleRow> {
+  return j<MappingRuleRow>(`/api/mapping-rules/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteMappingRule(id: number): Promise<{ ok: boolean }> {
+  return j<{ ok: boolean }>(`/api/mapping-rules/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export async function uploadImport(

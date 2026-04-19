@@ -460,6 +460,16 @@ export function getProductByName(db: DB, name: string): ProductRow | null {
   return row ?? null;
 }
 
+export function getProductById(db: DB, id: number): ProductRow | null {
+  const row = db.prepare(`
+    SELECT id, name, vendor, category, created_at, updated_at
+    FROM products
+    WHERE id = ?
+  `).get(id) as ProductRow | undefined;
+
+  return row ?? null;
+}
+
 export function listProducts(db: DB): ProductRow[] {
   return db.prepare(`
     SELECT id, name, vendor, category, created_at, updated_at
@@ -495,6 +505,40 @@ export function createProduct(
   if (!row) throw new Error("product create failed");
 
   return row;
+}
+
+export function updateProduct(
+  db: DB,
+  id: number,
+  input: { name: string; vendor?: string | undefined; category?: string | undefined }
+): ProductRow {
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE products
+    SET
+      name = ?,
+      vendor = ?,
+      category = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(
+    input.name.trim(),
+    input.vendor?.trim() || null,
+    input.category?.trim() || null,
+    now,
+    id
+  );
+
+  const row = getProductById(db, id);
+  if (!row) throw new Error("product not found");
+
+  return row;
+}
+
+export function removeProduct(db: DB, id: number): { ok: true } {
+  db.prepare(`DELETE FROM products WHERE id = ?`).run(id);
+  return { ok: true };
 }
 
 export function findOrCreateProductByName(
@@ -590,6 +634,42 @@ export function createMappingRule(
   `).get() as MappingRuleRow | undefined;
 
   if (!row) throw new Error("mapping rule create failed");
+
+  return row;
+}
+
+export function updateMappingRule(
+  db: DB,
+  id: number,
+  input: MappingRuleInput
+): MappingRuleRow {
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE mapping_rules
+    SET
+      pattern = ?,
+      canonical_product = ?,
+      product_id = ?,
+      match_type = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(
+    input.pattern,
+    input.canonical_product,
+    input.product_id ?? null,
+    input.match_type ?? "contains",
+    now,
+    id
+  );
+
+  const row = db
+    .prepare(`SELECT * FROM mapping_rules WHERE id = ?`)
+    .get(id) as MappingRuleRow | undefined;
+
+  if (!row) {
+    throw new Error("mapping rule not found");
+  }
 
   return row;
 }

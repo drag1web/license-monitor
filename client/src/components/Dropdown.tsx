@@ -74,7 +74,7 @@ function useLockBodyScroll(open: boolean, panelRef: React.RefObject<HTMLElement>
 type DropdownProps = {
   open: boolean;
   onClose: () => void;
-  anchorRef: React.RefObject<HTMLElement>;
+  anchorRef: React.RefObject<HTMLElement | null>;
   width?: number | string;
   sideOffset?: number;
   align?: "start" | "end";

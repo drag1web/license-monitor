@@ -16,7 +16,11 @@ import {
   removeLicenseRegistry,
   listProducts,
   listMappingRules,
+  createProduct,
+  updateProduct,
+  removeProduct,
   createMappingRule,
+  updateMappingRule,
   removeMappingRule,
   listImports,
   listAlerts,
@@ -418,6 +422,73 @@ async function main() {
     }
   });
 
+  app.post("/api/products", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
+    const body = req.body as Partial<{ name: string; vendor?: string; category?: string }>;
+
+    if (!body?.name?.trim()) {
+      res.status(400).json({ ok: false, error: "name required" });
+      return;
+    }
+
+    try {
+      const row = createProduct(db, {
+        name: String(body.name).trim(),
+        vendor: body.vendor ? String(body.vendor) : undefined,
+        category: body.category ? String(body.category) : undefined,
+      });
+
+      res.json(row);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.put("/api/products/:id", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
+    const id = Number(req.params.id);
+    const body = req.body as Partial<{ name: string; vendor?: string; category?: string }>;
+
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(400).json({ ok: false, error: "bad id" });
+      return;
+    }
+
+    if (!body?.name?.trim()) {
+      res.status(400).json({ ok: false, error: "name required" });
+      return;
+    }
+
+    try {
+      const row = updateProduct(db, id, {
+        name: String(body.name).trim(),
+        vendor: body.vendor ? String(body.vendor) : undefined,
+        category: body.category ? String(body.category) : undefined,
+      });
+
+      res.json(row);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.delete("/api/products/:id", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(400).json({ ok: false, error: "bad id" });
+      return;
+    }
+
+    try {
+      const out = removeProduct(db, id);
+      res.json(out);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
   app.get("/api/mapping-rules", requireAuth, (_req: Request, res: Response) => {
     try {
       const rows = listMappingRules(db);
@@ -443,6 +514,40 @@ async function main() {
 
     try {
       const row = createMappingRule(db, {
+        pattern: String(body.pattern).trim(),
+        canonical_product: String(body.canonical_product).trim(),
+        product_id: Number.isFinite(Number(body.product_id)) ? Number(body.product_id) : undefined,
+        match_type: body.match_type ? String(body.match_type) : "contains",
+      });
+
+      res.json(row);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.put("/api/mapping-rules/:id", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
+    const id = Number(req.params.id);
+    const body = req.body as Partial<MappingRuleInput>;
+
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(400).json({ ok: false, error: "bad id" });
+      return;
+    }
+
+    if (!body?.pattern?.trim()) {
+      res.status(400).json({ ok: false, error: "pattern required" });
+      return;
+    }
+
+    if (!body?.canonical_product?.trim()) {
+      res.status(400).json({ ok: false, error: "canonical_product required" });
+      return;
+    }
+
+    try {
+      const row = updateMappingRule(db, id, {
         pattern: String(body.pattern).trim(),
         canonical_product: String(body.canonical_product).trim(),
         product_id: Number.isFinite(Number(body.product_id)) ? Number(body.product_id) : undefined,

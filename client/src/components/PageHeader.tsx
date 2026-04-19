@@ -11,6 +11,7 @@ import {
   KeyRound,
   LogOut,
   FileInput,
+  BookOpen,
 } from "lucide-react";
 
 import { Card } from "../ui/Card";
@@ -49,6 +50,12 @@ const TABS: Tab[] = [
     match: (p) => p.startsWith("/imports"),
   },
   {
+    to: "/dictionaries/products",
+    label: "Справочники",
+    icon: <BookOpen className="h-4 w-4" />,
+    match: (p) => p.startsWith("/dictionaries"),
+  },
+  {
     to: "/settings",
     label: "Настройки",
     icon: <SettingsIcon className="h-4 w-4" />,
@@ -62,8 +69,12 @@ const BREAD_MAP: Record<string, string> = {
   settings: "Настройки",
   licenses: "Лицензии",
   login: "Вход",
+  imports: "Импорты",
+  alerts: "Уведомления",
+  dictionaries: "Справочники",
+  products: "Продукты",
+  mapping: "Правила сопоставления",
 };
-
 function humanizeSegment(seg: string) {
   if (/^\d+$/.test(seg)) return `#${seg}`;
   return BREAD_MAP[seg] ?? seg.replace(/[-_]/g, " ");

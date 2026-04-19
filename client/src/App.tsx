@@ -9,6 +9,9 @@ import Login from "./pages/Login";
 import Settings from "./pages/Settings";
 import AlertsPage from "./pages/AlertsPage";
 import Imports from "./pages/Imports";
+import Dictionaries from "./pages/Dictionaries";
+import DictionariesProducts from "./pages/DictionariesProducts";
+import DictionariesMapping from "./pages/DictionariesMapping";
 
 import { Protected } from "./Protected";
 import { useAuth } from "./auth/AuthContext";
@@ -83,7 +86,6 @@ function AuthedRoutes() {
             }
           />
 
-          {/* ✅ NEW: Licenses registry */}
           <Route
             path="/licenses"
             element={
@@ -112,6 +114,33 @@ function AuthedRoutes() {
           />
 
           <Route
+            path="/dictionaries"
+            element={<Navigate to="/dictionaries/products" replace />}
+          />
+
+          <Route
+            path="/dictionaries/products"
+            element={
+              <ProtectedShell title="Справочники">
+                <Dictionaries>
+                  <DictionariesProducts />
+                </Dictionaries>
+              </ProtectedShell>
+            }
+          />
+
+          <Route
+            path="/dictionaries/mapping"
+            element={
+              <ProtectedShell title="Справочники">
+                <Dictionaries>
+                  <DictionariesMapping />
+                </Dictionaries>
+              </ProtectedShell>
+            }
+          />
+
+          <Route
             path="/settings"
             element={
               <ProtectedShell title="Настройки">
@@ -123,7 +152,6 @@ function AuthedRoutes() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
-
     </AppLayout>
   );
 }
