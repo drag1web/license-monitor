@@ -109,6 +109,35 @@ export type ImportInput = {
   comment?: string | undefined;
 };
 
+export type AlertType =
+  | "deficit"
+  | "expiring"
+  | "unmatched"
+  | "pipeline_error"
+  | "stale_run";
+
+export type AlertSeverity = "info" | "warn" | "critical";
+
+export type AlertRow = {
+  id: number;
+  type: AlertType;
+  severity: AlertSeverity;
+  title: string;
+  message: string;
+  is_read: number;
+  run_id: number | null;
+  created_at: string;
+  read_at: string | null;
+};
+
+export type AlertInput = {
+  type: AlertType;
+  severity: AlertSeverity;
+  title: string;
+  message: string;
+  run_id?: number | undefined;
+};
+
 export function initDatabase(dbPath: string): DB {
   mkdirSync(dirname(dbPath), { recursive: true });
 
@@ -232,6 +261,28 @@ CREATE INDEX IF NOT EXISTS idx_imports_type
 
 CREATE INDEX IF NOT EXISTS idx_imports_imported_at
   ON imports(imported_at DESC);
+
+  CREATE TABLE IF NOT EXISTS alerts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  is_read INTEGER NOT NULL DEFAULT 0,
+  run_id INTEGER,
+  created_at TEXT NOT NULL,
+  read_at TEXT,
+  FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_created_at
+  ON alerts(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_is_read
+  ON alerts(is_read, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_run_id
+  ON alerts(run_id);
   `);
 
   const columns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
@@ -324,7 +375,7 @@ export function upsertLicenseRegistry(
 ): LicenseRegistryRow {
   const now = new Date().toISOString();
 
-    findOrCreateProductByName(db, {
+  findOrCreateProductByName(db, {
     name: input.product,
     vendor: input.vendor,
   });
@@ -589,6 +640,148 @@ export function listImports(db: DB): ImportRow[] {
     FROM imports
     ORDER BY imported_at DESC, id DESC
   `).all() as ImportRow[];
+}
+
+export function deleteOldImportsKeepLast(db: DB, keepLast: number): { ok: true; deleted: number } {
+  if (!Number.isFinite(keepLast) || keepLast < 0) {
+    throw new Error("keepLast must be >= 0");
+  }
+
+  const ids = db.prepare(`
+    SELECT id
+    FROM imports
+    ORDER BY imported_at DESC, id DESC
+    LIMIT -1 OFFSET ?
+  `).all(keepLast) as Array<{ id: number }>;
+
+  if (!ids.length) {
+    return { ok: true, deleted: 0 };
+  }
+
+  const stmt = db.prepare(`DELETE FROM imports WHERE id = ?`);
+  const tx = db.transaction((rows: Array<{ id: number }>) => {
+    for (const row of rows) {
+      stmt.run(row.id);
+    }
+  });
+
+  tx(ids);
+
+  return { ok: true, deleted: ids.length };
+}
+
+export function createAlert(db: DB, input: AlertInput): number {
+  const createdAt = new Date().toISOString();
+
+  const result = db.prepare(`
+    INSERT INTO alerts (
+      type,
+      severity,
+      title,
+      message,
+      is_read,
+      run_id,
+      created_at,
+      read_at
+    )
+    VALUES (?, ?, ?, ?, 0, ?, ?, NULL)
+  `).run(
+    input.type,
+    input.severity,
+    input.title.trim(),
+    input.message.trim(),
+    input.run_id ?? null,
+    createdAt
+  );
+
+  return Number(result.lastInsertRowid);
+}
+
+export function listAlerts(db: DB, limit = 20): AlertRow[] {
+  return db.prepare(`
+    SELECT
+      id,
+      type,
+      severity,
+      title,
+      message,
+      is_read,
+      run_id,
+      created_at,
+      read_at
+    FROM alerts
+    ORDER BY is_read ASC, created_at DESC, id DESC
+    LIMIT ?
+  `).all(limit) as AlertRow[];
+}
+
+export function getUnreadAlertsCount(db: DB): number {
+  const row = db.prepare(`
+    SELECT COUNT(*) as cnt
+    FROM alerts
+    WHERE is_read = 0
+  `).get() as { cnt: number } | undefined;
+
+  return Number(row?.cnt ?? 0);
+}
+
+export function markAlertRead(db: DB, id: number): { ok: true } {
+  db.prepare(`
+    UPDATE alerts
+    SET
+      is_read = 1,
+      read_at = COALESCE(read_at, ?)
+    WHERE id = ?
+  `).run(new Date().toISOString(), id);
+
+  return { ok: true };
+}
+
+export function markAllAlertsRead(db: DB): { ok: true } {
+  db.prepare(`
+    UPDATE alerts
+    SET
+      is_read = 1,
+      read_at = COALESCE(read_at, ?)
+    WHERE is_read = 0
+  `).run(new Date().toISOString());
+
+  return { ok: true };
+}
+
+export function deleteUnreadAlertsByType(
+  db: DB,
+  types: Array<"deficit" | "expiring" | "unmatched" | "pipeline_error" | "stale_run">
+): { ok: true } {
+  if (!types.length) return { ok: true };
+
+  const placeholders = types.map(() => "?").join(", ");
+
+  db.prepare(`
+    DELETE FROM alerts
+    WHERE is_read = 0
+      AND type IN (${placeholders})
+  `).run(...types);
+
+  return { ok: true };
+}
+
+export function deleteAlert(db: DB, id: number): { ok: true } {
+  db.prepare(`
+    DELETE FROM alerts
+    WHERE id = ?
+  `).run(id);
+
+  return { ok: true };
+}
+
+export function deleteReadAlerts(db: DB): { ok: true } {
+  db.prepare(`
+    DELETE FROM alerts
+    WHERE is_read = 1
+  `).run();
+
+  return { ok: true };
 }
 
 export function saveRun(db: DB, stats: RunStats): number {

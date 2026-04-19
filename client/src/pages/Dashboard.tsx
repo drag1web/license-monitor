@@ -663,6 +663,7 @@ export default function Dashboard() {
       });
 
       await refresh();
+      window.dispatchEvent(new CustomEvent("alerts:refresh"));
     } catch (e: any) {
       const msg = String(e?.message ?? e);
 

@@ -7,6 +7,8 @@ import RunDiff from "./pages/RunDiff";
 import Licenses from "./pages/Licenses";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
+import AlertsPage from "./pages/AlertsPage";
+import Imports from "./pages/Imports";
 
 import { Protected } from "./Protected";
 import { useAuth } from "./auth/AuthContext";
@@ -87,6 +89,24 @@ function AuthedRoutes() {
             element={
               <ProtectedShell title="Реестр лицензий">
                 <Licenses />
+              </ProtectedShell>
+            }
+          />
+
+          <Route
+            path="/imports"
+            element={
+              <ProtectedShell title="Импорты">
+                <Imports />
+              </ProtectedShell>
+            }
+          />
+
+          <Route
+            path="/alerts"
+            element={
+              <ProtectedShell title="Уведомления">
+                <AlertsPage />
               </ProtectedShell>
             }
           />

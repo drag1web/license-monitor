@@ -30,6 +30,38 @@ export type ResultRow = {
   nearest_end_date: string | null;
 };
 
+export type AlertSeverity = "info" | "warn" | "critical";
+export type AlertType =
+  | "deficit"
+  | "expiring"
+  | "unmatched"
+  | "pipeline_error"
+  | "stale_run";
+
+export type AlertRow = {
+  id: number;
+  type: AlertType;
+  severity: AlertSeverity;
+  title: string;
+  message: string;
+  is_read: number;
+  run_id: number | null;
+  created_at: string;
+  read_at: string | null;
+};
+
+export type ImportRow = {
+  id: number;
+  import_type: string;
+  file_name: string | null;
+  source_path: string | null;
+  rows_count: number;
+  status: string;
+  comment: string | null;
+  imported_at: string;
+};
+
+
 /* ------------------------------------------
  * HTTP helper (sessions-safe)
  * ------------------------------------------ */
@@ -116,6 +148,26 @@ export function runCheck(): Promise<{ ok: boolean; runId?: number; error?: strin
   return j("/api/run", { method: "POST" });
 }
 
+export function getAlerts(limit = 20): Promise<{ items: AlertRow[]; unread: number }> {
+  return j(`/api/alerts?limit=${encodeURIComponent(String(limit))}`);
+}
+
+export function readAlert(id: number): Promise<{ ok: true }> {
+  return j(`/api/alerts/${id}/read`, { method: "POST" });
+}
+
+export function readAllAlerts(): Promise<{ ok: true }> {
+  return j(`/api/alerts/read-all`, { method: "POST" });
+}
+
+export function deleteAlertById(id: number): Promise<{ ok: true }> {
+  return j(`/api/alerts/${id}`, { method: "DELETE" });
+}
+
+export function deleteReadAlerts(): Promise<{ ok: true }> {
+  return j(`/api/alerts/read`, { method: "DELETE" });
+}
+
 export function deleteRun(id: number): Promise<ApiResp> {
   return j<ApiResp>(`/api/runs/${id}`, { method: "DELETE" });
 }
@@ -145,6 +197,31 @@ export function cleanupDeleteAll(confirm: "DELETE_ALL") {
   return j(`/api/runs/cleanup/delete-all`, {
     method: "POST",
     body: JSON.stringify({ confirm }),
+  });
+}
+
+export function cleanupImportsKeepLast(keepLast: number) {
+  return j<{ ok: boolean; deleted?: number; error?: string }>("/api/imports/cleanup/keep-last", {
+    method: "POST",
+    body: JSON.stringify({ keepLast }),
+  });
+}
+
+export function getImports(): Promise<ImportRow[]> {
+  return j<ImportRow[]>("/api/imports");
+}
+
+export async function uploadImport(
+  importType: "installations" | "licenses" | "mapping",
+  file: File
+): Promise<{ ok: boolean; file_name?: string; saved_as?: string; path?: string; error?: string }> {
+  const form = new FormData();
+  form.append("import_type", importType);
+  form.append("file", file);
+
+  return j("/api/imports/upload", {
+    method: "POST",
+    body: form,
   });
 }
 

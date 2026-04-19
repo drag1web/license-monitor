@@ -4,7 +4,14 @@ import { writeReportXlsx } from "../report/writeReportXlsx.js";
 import { buildRules } from "../core/mapping.js";
 import { buildReport, type InstallationRow, type LicenseRow } from "../core/compliance.js";
 import { validateInstallations, validateLicenses } from "../core/validate.js";
-import { initDatabase, saveRun, saveResults, createImportLog } from "../db/database.js";
+import {
+  initDatabase,
+  saveRun,
+  saveResults,
+  createImportLog,
+  createAlert,
+  deleteUnreadAlertsByType,
+} from "../db/database.js";
 
 export type Config = {
   installationsPath: string;
@@ -27,15 +34,57 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
   const db = initDatabase(config.dbPath);
 
   // 1) load
-  const installsRaw = await readCsv<InstallationRow>(config.installationsPath);
-  const licensesRaw = await readCsv<LicenseRow>(config.licensesPath);
+  let installsRaw: InstallationRow[] = [];
+  let licensesRaw: LicenseRow[] = [];
+
+  try {
+    installsRaw = await readCsv<InstallationRow>(config.installationsPath);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+
+    createImportLog(db, {
+      import_type: "installations",
+      file_name: "installations.csv",
+      source_path: config.installationsPath,
+      rows_count: 0,
+      status: "failed",
+      comment: `csv read error: ${msg}`,
+    });
+
+    throw e;
+  }
+
+  try {
+    licensesRaw = await readCsv<LicenseRow>(config.licensesPath);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+
+    createImportLog(db, {
+      import_type: "licenses",
+      file_name: "licenses.csv",
+      source_path: config.licensesPath,
+      rows_count: 0,
+      status: "failed",
+      comment: `csv read error: ${msg}`,
+    });
+
+    throw e;
+  }
+
+  // 2) validate
+  const vi = validateInstallations(installsRaw);
+  const vl = validateLicenses(licensesRaw);
 
   createImportLog(db, {
     import_type: "installations",
     file_name: "installations.csv",
     source_path: config.installationsPath,
     rows_count: installsRaw.length,
-    status: "success",
+    status: vi.bad.length > 0 ? "partial" : "success",
+    comment:
+      vi.bad.length > 0
+        ? `valid: ${vi.good.length}, bad: ${vi.bad.length}`
+        : `validated: ${vi.good.length}/${installsRaw.length}`,
   });
 
   createImportLog(db, {
@@ -43,12 +92,12 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
     file_name: "licenses.csv",
     source_path: config.licensesPath,
     rows_count: licensesRaw.length,
-    status: "success",
+    status: vl.bad.length > 0 ? "partial" : "success",
+    comment:
+      vl.bad.length > 0
+        ? `valid: ${vl.good.length}, bad: ${vl.bad.length}`
+        : `validated: ${vl.good.length}/${licensesRaw.length}`,
   });
-
-  // 2) validate
-  const vi = validateInstallations(installsRaw);
-  const vl = validateLicenses(licensesRaw);
 
   if (vi.bad.length || vl.bad.length) {
     const badRows = [...vi.bad, ...vl.bad];
@@ -60,16 +109,36 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
   }
 
   // 3) mapping
-  const mappingRows = await readCsv<{ pattern: string; canonical_product: string }>(config.mappingPath);
-  const rules = buildRules(mappingRows);
+  let mappingRows: { pattern: string; canonical_product: string }[] = [];
+
+  try {
+    mappingRows = await readCsv<{ pattern: string; canonical_product: string }>(config.mappingPath);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
 
     createImportLog(db, {
+      import_type: "mapping",
+      file_name: "mapping.csv",
+      source_path: config.mappingPath,
+      rows_count: 0,
+      status: "failed",
+      comment: `csv read error: ${msg}`,
+    });
+
+    throw e;
+  }
+
+  const rules = buildRules(mappingRows);
+
+  createImportLog(db, {
     import_type: "mapping",
     file_name: "mapping.csv",
     source_path: config.mappingPath,
     rows_count: mappingRows.length,
     status: "success",
+    comment: `rules built: ${mappingRows.length}`,
   });
+
 
   // 4) report
   const { report, unmatched } = buildReport(vi.good, vl.good, rules, config.expiresDays);
@@ -132,6 +201,42 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
   });
 
   saveResults(db, runId, report);
+
+  deleteUnreadAlertsByType(db, ["deficit", "expiring", "unmatched"]);
+
+  const deficitCount = report.filter((r) => r.risk === "DEFICIT").length;
+  const expiringCount = report.filter((r) => r.expires_soon === "YES").length;
+  const unmatchedCount = unmatched.length;
+
+  if (deficitCount > 0) {
+    createAlert(db, {
+      type: "deficit",
+      severity: "critical",
+      title: "Обнаружен дефицит лицензий",
+      message: `Найдено ${deficitCount} продуктов с нехваткой лицензий.`,
+      run_id: runId,
+    });
+  }
+
+  if (expiringCount > 0) {
+    createAlert(db, {
+      type: "expiring",
+      severity: "warn",
+      title: "Есть лицензии с истекающим сроком",
+      message: `Обнаружено ${expiringCount} продуктов, у которых лицензии скоро истекают.`,
+      run_id: runId,
+    });
+  }
+
+  if (unmatchedCount > 0) {
+    createAlert(db, {
+      type: "unmatched",
+      severity: "warn",
+      title: "Есть несопоставленные установки",
+      message: `Найдено ${unmatchedCount} установок без сопоставления.`,
+      run_id: runId,
+    });
+  }
 
   return { runId };
 }

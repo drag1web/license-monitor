@@ -49,10 +49,10 @@ function safeNum(v: unknown) {
 }
 
 function toneFromItem(x: DiffItem): Tone {
-  // “хуже” = delta уменьшился
+  // хуже = delta вырос
   if (x.kind === "new") return "warn";
   if (x.kind === "removed") return "ok";
-  if (x.delta_now < x.delta_prev) return "bad";
+  if (x.delta_now > x.delta_prev) return "bad";
   if (x.expires_now && !x.expires_prev) return "warn";
   return "ok";
 }
@@ -251,8 +251,8 @@ export default function RunDiff() {
         return hay.includes(needle);
       })
       .filter((x) => {
-        if (onlyWorsened && !(x.delta_now < x.delta_prev)) return false;
-        if (onlyImproved && !(x.delta_now > x.delta_prev)) return false;
+        if (onlyWorsened && !(x.delta_now > x.delta_prev)) return false;
+        if (onlyImproved && !(x.delta_now < x.delta_prev)) return false;
         if (expiresBecameYes && !(x.expires_now && !x.expires_prev)) return false;
         return true;
       });
@@ -665,9 +665,9 @@ export default function RunDiff() {
                         <Td
                           className={cn(
                             "tabular-nums font-semibold",
-                            x.delta_now < x.delta_prev
+                            x.delta_now > x.delta_prev
                               ? "text-rose-200"
-                              : x.delta_now > x.delta_prev
+                              : x.delta_now < x.delta_prev
                                 ? "text-emerald-200"
                                 : "text-white/75"
                           )}

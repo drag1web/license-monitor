@@ -1,5 +1,7 @@
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import multer from "multer";
+import { mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createReadStream, existsSync } from "node:fs";
 import path from "node:path";
@@ -17,6 +19,15 @@ import {
   createMappingRule,
   removeMappingRule,
   listImports,
+  listAlerts,
+  getUnreadAlertsCount,
+  markAlertRead,
+  markAllAlertsRead,
+  createAlert,
+  createImportLog,
+  deleteAlert,
+  deleteReadAlerts,
+  deleteOldImportsKeepLast,
   type LicenseRegistryInput,
   type MappingRuleInput,
 } from "./db/database.js";
@@ -133,6 +144,42 @@ async function main() {
   }
 
   const app = express();
+
+  const dataDir = path.resolve(process.cwd(), "data");
+  mkdirSync(dataDir, { recursive: true });
+
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: (_req, _file, cb) => {
+        cb(null, dataDir);
+      },
+      filename: (req, file, cb) => {
+        const importType = String(req.body?.import_type ?? "").trim();
+
+        const safeName =
+          importType === "installations"
+            ? "installations.csv"
+            : importType === "licenses"
+              ? "licenses.csv"
+              : importType === "mapping"
+                ? "mapping.csv"
+                : file.originalname || "upload.csv";
+
+        cb(null, safeName);
+      },
+    }),
+    fileFilter: (_req, file, cb) => {
+      const name = String(file.originalname || "").toLowerCase();
+      if (!name.endsWith(".csv")) {
+        cb(new Error("only .csv files are allowed"));
+        return;
+      }
+      cb(null, true);
+    },
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10 MB
+    },
+  });
 
   // Если в Electron/локально — cors не обязателен. Но пусть будет, чтобы не ломать.
   app.use(cors());
@@ -371,7 +418,7 @@ async function main() {
     }
   });
 
-    app.get("/api/mapping-rules", requireAuth, (_req: Request, res: Response) => {
+  app.get("/api/mapping-rules", requireAuth, (_req: Request, res: Response) => {
     try {
       const rows = listMappingRules(db);
       res.json(rows);
@@ -426,7 +473,7 @@ async function main() {
     }
   });
 
-    app.get("/api/imports", requireAuth, (_req: Request, res: Response) => {
+  app.get("/api/imports", requireAuth, (_req: Request, res: Response) => {
     try {
       const rows = listImports(db);
       res.json(rows);
@@ -435,6 +482,137 @@ async function main() {
       res.status(500).json({ ok: false, error: msg });
     }
   });
+
+  app.post(
+    "/api/imports/upload",
+    requireAuth,
+    requireRole("admin"),
+    upload.single("file"),
+    async (req: AuthedReq, res: Response) => {
+      try {
+        const importType = String(req.body?.import_type ?? "").trim();
+        const file = req.file;
+
+        if (!importType || !["installations", "licenses", "mapping"].includes(importType)) {
+          res.status(400).json({ ok: false, error: "bad import_type" });
+          return;
+        }
+
+        if (!file) {
+          res.status(400).json({ ok: false, error: "file required" });
+          return;
+        }
+
+        createImportLog(db, {
+          import_type: importType,
+          file_name: file.originalname,
+          source_path: file.path,
+          rows_count: 0,
+          status: "success",
+          comment: `uploaded manually by ${req.session.user?.login ?? "unknown"}`,
+        });
+
+        res.json({
+          ok: true,
+          file_name: file.originalname,
+          saved_as: file.filename,
+          path: file.path,
+        });
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        res.status(500).json({ ok: false, error: msg });
+      }
+    }
+  );
+
+  app.post("/api/imports/cleanup/keep-last", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
+    const keepLast = Number(req.body?.keepLast);
+
+    if (!Number.isFinite(keepLast) || keepLast < 0) {
+      res.status(400).json({ ok: false, error: "keepLast must be >= 0" });
+      return;
+    }
+
+    try {
+      const out = deleteOldImportsKeepLast(db, keepLast);
+      res.json(out);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.get("/api/alerts", requireAuth, (req: Request, res: Response) => {
+    const limitRaw = Number(req.query.limit);
+    const limit =
+      Number.isFinite(limitRaw) && limitRaw > 0
+        ? Math.min(limitRaw, 100)
+        : 20;
+
+    try {
+      const items = listAlerts(db, limit);
+      const unread = getUnreadAlertsCount(db);
+      res.json({ items, unread });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.post("/api/alerts/:id/read", requireAuth, (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(400).json({ ok: false, error: "bad alert id" });
+      return;
+    }
+
+    try {
+      const out = markAlertRead(db, id);
+      res.json(out);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.post("/api/alerts/read-all", requireAuth, (_req: Request, res: Response) => {
+    try {
+      const out = markAllAlertsRead(db);
+      res.json(out);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.delete("/api/alerts/read", requireAuth, (_req: Request, res: Response) => {
+    try {
+      const out = deleteReadAlerts(db);
+      res.json(out);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.delete("/api/alerts/:id", requireAuth, (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(400).json({ ok: false, error: "bad alert id" });
+      return;
+    }
+
+    try {
+      const out = deleteAlert(db, id);
+      res.json(out);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
 
   // ---------------- API ----------------
   app.get("/api/health", (_req: Request, res: Response) => res.json({ ok: true }));
@@ -565,6 +743,18 @@ async function main() {
       res.json({ ok: true, runId: out.runId });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
+
+      try {
+        createAlert(db, {
+          type: "pipeline_error",
+          severity: "critical",
+          title: "Ошибка выполнения проверки",
+          message: msg,
+        });
+      } catch (alertErr) {
+        console.error("ALERT CREATE ERROR:", alertErr);
+      }
+
       res.status(500).json({ ok: false, error: msg });
     }
   });

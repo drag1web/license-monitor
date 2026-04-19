@@ -10,6 +10,7 @@ import {
   Command,
   KeyRound,
   LogOut,
+  FileInput,
 } from "lucide-react";
 
 import { Card } from "../ui/Card";
@@ -40,6 +41,12 @@ const TABS: Tab[] = [
     label: "Лицензии",
     icon: <KeyRound className="h-4 w-4" />,
     match: (p) => p.startsWith("/licenses"),
+  },
+  {
+    to: "/imports",
+    label: "Импорты",
+    icon: <FileInput className="h-4 w-4" />,
+    match: (p) => p.startsWith("/imports"),
   },
   {
     to: "/settings",
@@ -106,18 +113,18 @@ function SoftPillLink({
         "focus-visible:ring-2 focus-visible:ring-cyan-300/25",
         active
           ? cn(
-              "text-white/92",
-              "border border-cyan-200/18",
-              "bg-gradient-to-b from-cyan-300/14 via-white/[0.07] to-white/[0.04]",
-              "shadow-[0_14px_55px_rgba(34,211,238,0.10)]"
-            )
+            "text-white/92",
+            "border border-cyan-200/18",
+            "bg-gradient-to-b from-cyan-300/14 via-white/[0.07] to-white/[0.04]",
+            "shadow-[0_14px_55px_rgba(34,211,238,0.10)]"
+          )
           : cn(
-              "text-white/72",
-              "border border-white/[0.08]",
-              "bg-white/[0.02]",
-              "hover:bg-white/[0.05] hover:text-white/88 hover:border-white/[0.12]",
-              "shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
-            )
+            "text-white/72",
+            "border border-white/[0.08]",
+            "bg-white/[0.02]",
+            "hover:bg-white/[0.05] hover:text-white/88 hover:border-white/[0.12]",
+            "shadow-[0_12px_40px_rgba(0,0,0,0.28)]"
+          )
       )}
     >
       <span className={cn("text-white/55", active && "text-cyan-200/90")}>
@@ -335,37 +342,6 @@ export function PageHeader({
 
             <div className="hidden xl:flex flex-col items-end gap-3">
 
-              <div className="flex flex-wrap items-center gap-2 text-[12px] text-white/45">
-                <span className="hidden 2xl:inline">Быстрые действия:</span>
-
-                <Link
-                  to="/runs"
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-2xl px-3 py-2",
-                    "border border-white/[0.08] bg-white/[0.02]",
-                    "hover:bg-white/[0.06] hover:border-white/[0.12]",
-                    "transition"
-                  )}
-                  title="Открыть раздел запусков"
-                >
-                  <ArrowUpRight className="h-4 w-4 text-white/40" />
-                  <span>Открыть запуски</span>
-                </Link>
-
-                <Link
-                  to="/licenses"
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-2xl px-3 py-2",
-                    "border border-white/[0.08] bg-white/[0.02]",
-                    "hover:bg-white/[0.06] hover:border-white/[0.12]",
-                    "transition"
-                  )}
-                  title="Открыть Licenses"
-                >
-                  <ArrowUpRight className="h-4 w-4 text-white/40" />
-                  <span>Открыть лицензии</span>
-                </Link>
-              </div>
             </div>
           </div>
         </div>

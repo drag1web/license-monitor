@@ -23,10 +23,10 @@ export type DiffItem = {
   expires_prev: boolean;
 
   kind:
-    | "new"          // новая строка
-    | "removed"      // исчезла
-    | "changed"      // изменилась
-    | "same";        // без изменений (обычно не показываем)
+  | "new"          // новая строка
+  | "removed"      // исчезла
+  | "changed"      // изменилась
+  | "same";        // без изменений (обычно не показываем)
 };
 
 export type RunDiff = {
@@ -126,8 +126,8 @@ export function computeRunDiff(nowRows: ResultRow[], prevRows: ResultRow[]): Run
 
       // improvements / worsening based on delta direction
       if (changed) {
-        if (delta_now < delta_prev) worsened++;
-        if (delta_now > delta_prev) improved++;
+        if (delta_now > delta_prev) worsened++;
+        if (delta_now < delta_prev) improved++;
         if (expires_now && !expires_prev) expiresNew++;
       }
     }
@@ -177,8 +177,8 @@ export function diffScore(x: DiffItem) {
   if (x.kind === "changed") score += 8;
 
   // ухудшение delta
-  if (x.delta_now < x.delta_prev) score += 25;
-  if (x.delta_now > x.delta_prev) score += 12;
+  if (x.delta_now > x.delta_prev) score += 25;
+  if (x.delta_now < x.delta_prev) score += 12;
 
   // expires became true
   if (x.expires_now && !x.expires_prev) score += 18;

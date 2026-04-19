@@ -68,7 +68,7 @@ export function TopBar({
     // crisp top inner highlight
     "shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]",
     // transform perf
-    "relative isolate overflow-hidden"
+    "relative isolate overflow-visible"
   );
 
   const wrap = "h-12 px-3 flex items-center gap-3";
@@ -196,15 +196,7 @@ export function TopBar({
         {/* right: custom slot + window controls */}
         <div className="ml-auto flex items-center gap-2" style={NODRAG_STYLE}>
           {rightSlot && (
-            <div
-              className={cn(
-                "mr-1 flex items-center gap-2 rounded-2xl px-2 py-1",
-                "bg-white/[0.025] border border-white/[0.06]",
-                "shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]",
-                "hover:bg-white/[0.045] hover:border-white/[0.10]",
-                "transition-[background,border,box-shadow] duration-300"
-              )}
-            >
+            <div className="mr-1 flex items-center gap-2">
               {rightSlot}
             </div>
           )}
