@@ -2,27 +2,9 @@ import React from "react";
 import { cn } from "./cn/cn";
 import { ChevronDown, ChevronUp, SearchX } from "lucide-react";
 
-/**
- * ==========================================
- *  TABLE DESIGN SYSTEM (Glass / Graphite)
- * ==========================================
- * Features:
- * - glass container with top glow
- * - optional sticky header
- * - zebra rows + hover highlight
- * - density modes (comfortable/compact)
- * - caption + toolbar + empty state
- * - sortable headers (optional)
- * - skeleton rows (optional)
- */
-
-/* ------------------------------------------
- *  Tokens (tailwind classes)
- * ------------------------------------------ */
-
 const TOKENS = {
   container:
-    "relative overflow-hidden rounded-2xl " +
+    "relative rounded-2xl " +
     "border border-white/[0.08] " +
     "bg-gradient-to-b from-slate-950/70 via-slate-950/45 to-slate-950/25 " +
     "backdrop-blur-xl " +
@@ -33,13 +15,8 @@ const TOKENS = {
     "pointer-events-none absolute inset-x-0 top-0 h-px " +
     "bg-gradient-to-r from-transparent via-cyan-300/20 to-transparent",
 
-  bottomFade:
-    "pointer-events-none absolute inset-x-0 bottom-0 h-10 " +
-    "bg-gradient-to-b from-transparent to-black/25",
-
   scroll:
     "overflow-auto " +
-    // nicer scrollbars (webkit)
     "[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 " +
     "[&::-webkit-scrollbar-thumb]:rounded-full " +
     "[&::-webkit-scrollbar-thumb]:bg-white/10 " +
@@ -56,11 +33,11 @@ const TOKENS = {
     "text-left font-semibold tracking-[0.01em] " +
     "text-white/70 " +
     "border-b border-white/[0.08] " +
-    "px-4 py-3",
+    "px-4 py-3 whitespace-nowrap",
 
   tdBase:
     "px-4 py-3 text-white/85 " +
-    "border-b border-white/[0.06]",
+    "border-b border-white/[0.06] align-middle",
 
   trRow:
     "transition-colors " +
@@ -71,7 +48,6 @@ const TOKENS = {
     "[&>tbody>tr:nth-child(even)]:bg-white/[0.015] " +
     "[&>tbody>tr:nth-child(odd)]:bg-transparent",
 
-  // density variants
   density: {
     comfortable: {
       th: "py-3 px-4",
@@ -83,14 +59,9 @@ const TOKENS = {
     },
   },
 
-  // subtle “divider” for groups/sections
   sectionDivider:
     "h-px bg-gradient-to-r from-transparent via-white/10 to-transparent",
 };
-
-/* ------------------------------------------
- *  Base Container
- * ------------------------------------------ */
 
 export function Table({
   className,
@@ -100,21 +71,11 @@ export function Table({
   return (
     <div className={cn(TOKENS.container, className)} {...p}>
       <div className={TOKENS.topGlow} />
-      <div className={TOKENS.bottomFade} />
       {children}
     </div>
   );
 }
 
-/**
- * Wrapper with scrolling; use it when you want sticky header to work properly.
- * Example:
- * <Table>
- *   <TableScroll className="max-h-[60vh]">
- *     <TableInner stickyHeader>...</TableInner>
- *   </TableScroll>
- * </Table>
- */
 export function TableScroll({
   className,
   ...p
@@ -122,16 +83,13 @@ export function TableScroll({
   return <div className={cn(TOKENS.scroll, className)} {...p} />;
 }
 
-/* ------------------------------------------
- *  Table Inner (table element)
- * ------------------------------------------ */
-
 type Density = "comfortable" | "compact";
 
 type TableInnerProps = React.TableHTMLAttributes<HTMLTableElement> & {
   zebra?: boolean;
   stickyHeader?: boolean;
   density?: Density;
+  fixedLayout?: boolean;
 };
 
 export function TableInner({
@@ -139,29 +97,25 @@ export function TableInner({
   zebra = true,
   stickyHeader = false,
   density = "comfortable",
+  fixedLayout = false,
   ...p
 }: TableInnerProps) {
-  // We store density in data-attr for Th/Td helpers
   return (
     <table
       data-density={density}
       className={cn(
         TOKENS.table,
+        fixedLayout ? "table-fixed" : "table-auto",
         zebra && TOKENS.zebra,
         stickyHeader &&
-        // sticky thead cells
-        "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 " +
-        "[&_thead_th]:backdrop-blur-xl [&_thead_th]:bg-slate-950/55",
+          "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 " +
+            "[&_thead_th]:backdrop-blur-xl [&_thead_th]:bg-slate-950/80",
         className
       )}
       {...p}
     />
   );
 }
-
-/* ------------------------------------------
- *  Head / Body helpers
- * ------------------------------------------ */
 
 export function THead({
   className,
@@ -182,19 +136,10 @@ export function Tr({
   interactive = true,
   ...p
 }: React.HTMLAttributes<HTMLTableRowElement> & { interactive?: boolean }) {
-  return (
-    <tr className={cn(interactive && TOKENS.trRow, className)} {...p} />
-  );
+  return <tr className={cn(interactive && TOKENS.trRow, className)} {...p} />;
 }
 
-/* ------------------------------------------
- *  Cells
- * ------------------------------------------ */
-
-function densityClass(
-  kind: "th" | "td",
-  density: Density | undefined
-): string {
+function densityClass(kind: "th" | "td", density: Density | undefined): string {
   const d = density ?? "comfortable";
   return TOKENS.density[d][kind];
 }
@@ -203,8 +148,6 @@ export function Th({
   className,
   ...p
 }: React.ThHTMLAttributes<HTMLTableCellElement>) {
-  // Find density from nearest table (data-density)
-  // TS ok because we only read dataset
   const ref = React.useRef<HTMLTableCellElement | null>(null);
   const [density, setDensity] = React.useState<Density>("comfortable");
 
@@ -222,7 +165,6 @@ export function Th({
       className={cn(
         TOKENS.thBase,
         densityClass("th", density),
-        // subtle header gradient
         "bg-gradient-to-b from-white/[0.05] to-white/[0.02]",
         className
       )}
@@ -252,7 +194,6 @@ export function Td({
       className={cn(
         TOKENS.tdBase,
         densityClass("td", density),
-        // nice focus inside cells
         "[&:has(:focus-visible)]:ring-2 [&:has(:focus-visible)]:ring-cyan-300/25 [&:has(:focus-visible)]:rounded-xl",
         className
       )}
@@ -260,10 +201,6 @@ export function Td({
     />
   );
 }
-
-/* ------------------------------------------
- *  Nice utilities (optional)
- * ------------------------------------------ */
 
 export function TableCaption({
   title,
@@ -321,10 +258,6 @@ export function TableSectionDivider({ className }: { className?: string }) {
   return <div className={cn(TOKENS.sectionDivider, className)} />;
 }
 
-/* ------------------------------------------
- *  Sortable header (optional)
- * ------------------------------------------ */
-
 type SortDir = "asc" | "desc" | null;
 
 export function SortTh({
@@ -346,8 +279,8 @@ export function SortTh({
     align === "left"
       ? "justify-start text-left"
       : align === "center"
-        ? "justify-center text-center"
-        : "justify-end text-right";
+      ? "justify-center text-center"
+      : "justify-end text-right";
 
   const Icon = dir === "asc" ? ChevronUp : dir === "desc" ? ChevronDown : null;
 
@@ -358,34 +291,30 @@ export function SortTh({
         title={hint ?? "Сортировать"}
         onClick={onToggle}
         className={cn(
-          "group inline-flex w-full items-center gap-2",
+          "group inline-flex w-full min-w-0 items-center gap-2",
           justify,
-          "outline-none",
-          "rounded-xl px-2 py-1 -mx-2 -my-1",
-          "hover:bg-white/[0.05] active:bg-white/[0.07]",
-          "focus-visible:ring-2 focus-visible:ring-cyan-300/25"
+          "outline-none rounded-xl px-2 py-1 -mx-2 -my-1",
+          onToggle
+            ? "hover:bg-white/[0.05] active:bg-white/[0.07] focus-visible:ring-2 focus-visible:ring-cyan-300/25 cursor-pointer"
+            : "cursor-default"
         )}
       >
-        <span className="min-w-0 truncate">
-          {label}
-        </span>
+        <span className="min-w-0 whitespace-nowrap">{label}</span>
 
-        <span
-          className={cn(
-            "ml-auto shrink-0 inline-flex items-center",
-            "text-white/45 group-hover:text-white/70 transition-colors"
-          )}
-        >
-          {Icon ? <Icon className="h-3.5 w-3.5" /> : <span className="h-3.5 w-3.5" />}
-        </span>
+        {onToggle && (
+          <span
+            className={cn(
+              "shrink-0 inline-flex items-center",
+              "text-white/45 group-hover:text-white/70 transition-colors"
+            )}
+          >
+            {Icon ? <Icon className="h-3.5 w-3.5" /> : <span className="h-3.5 w-3.5" />}
+          </span>
+        )}
       </button>
     </Th>
   );
 }
-
-/* ------------------------------------------
- *  Empty state (optional)
- * ------------------------------------------ */
 
 export function TableEmpty({
   title = "Nothing here yet",
@@ -399,12 +328,7 @@ export function TableEmpty({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "px-6 py-10 flex flex-col items-center text-center gap-3",
-        className
-      )}
-    >
+    <div className={cn("px-6 py-10 flex flex-col items-center text-center gap-3", className)}>
       <div
         className={cn(
           "h-10 w-10 rounded-2xl grid place-items-center",
@@ -425,10 +349,6 @@ export function TableEmpty({
   );
 }
 
-/* ------------------------------------------
- *  Skeleton (optional)
- * ------------------------------------------ */
-
 export function TableSkeleton({
   rows = 6,
   cols = 4,
@@ -445,8 +365,7 @@ export function TableSkeleton({
           <div
             key={r}
             className={cn(
-              "grid gap-2",
-              "rounded-2xl border border-white/[0.06]",
+              "grid gap-2 rounded-2xl border border-white/[0.06]",
               "bg-white/[0.02] px-3 py-2"
             )}
             style={{

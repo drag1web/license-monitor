@@ -1,42 +1,85 @@
 import { normalizeProductName } from "./normalize.js";
 
+export type MappingMatchType = "contains" | "exact" | "regex";
+
 export type MappingRule = {
-  pattern: string;           // нормализованный pattern
-  canonical_product: string; // красивое canonical
-  canonical_key: string;     // нормализованный ключ canonical
+  pattern: string;
+  canonical_product: string;
+  canonical_key: string;
+  match_type: MappingMatchType;
 };
 
-export function buildRules(rows: { pattern: string; canonical_product: string }[]): MappingRule[] {
+type BuildRuleRow = {
+  pattern: string;
+  canonical_product: string;
+  match_type?: string | null;
+};
+
+function normalizeMatchType(value: string | null | undefined): MappingMatchType {
+  const v = String(value ?? "contains").trim().toLowerCase();
+
+  if (v === "exact") return "exact";
+  if (v === "regex") return "regex";
+  return "contains";
+}
+
+export function buildRules(rows: BuildRuleRow[]): MappingRule[] {
   return rows
     .map((r) => {
-      const canonical = r.canonical_product.trim();
+      const canonical = String(r.canonical_product ?? "").trim();
+      const rawPattern = String(r.pattern ?? "").trim();
+      const matchType = normalizeMatchType(r.match_type);
+
       return {
-        pattern: normalizeProductName(r.pattern),
+        pattern: matchType === "regex" ? rawPattern : normalizeProductName(rawPattern),
         canonical_product: canonical,
         canonical_key: normalizeProductName(canonical),
+        match_type: matchType,
       };
     })
-    // важный момент: более длинные pattern должны применяться раньше
-    .sort((a, b) => b.pattern.length - a.pattern.length);
+    .filter((r) => r.pattern && r.canonical_product)
+    .sort((a, b) => {
+      const aPriority = a.match_type === "exact" ? 3 : a.match_type === "regex" ? 2 : 1;
+      const bPriority = b.match_type === "exact" ? 3 : b.match_type === "regex" ? 2 : 1;
+
+      if (aPriority !== bPriority) return bPriority - aPriority;
+      return b.pattern.length - a.pattern.length;
+    });
+}
+
+function matchesRule(normalizedInput: string, rawInput: string, rule: MappingRule): boolean {
+  if (!normalizedInput || !rule.pattern) return false;
+
+  if (rule.match_type === "exact") {
+    return normalizedInput === rule.pattern;
+  }
+
+  if (rule.match_type === "regex") {
+    try {
+      return new RegExp(rule.pattern, "i").test(rawInput);
+    } catch {
+      return false;
+    }
+  }
+
+  return normalizedInput.includes(rule.pattern);
 }
 
 export function resolveProduct(
   rawName: string,
   rules: MappingRule[]
 ): { product: string; key: string; matchedBy?: string } {
-  const n = normalizeProductName(rawName);
+  const normalizedInput = normalizeProductName(rawName);
 
   for (const rule of rules) {
-    if (n.includes(rule.pattern)) {
+    if (matchesRule(normalizedInput, rawName, rule)) {
       return {
         product: rule.canonical_product,
         key: rule.canonical_key,
-        matchedBy: rule.pattern,
+        matchedBy: `${rule.match_type}:${rule.pattern}`,
       };
     }
   }
 
-  // если правило не нашлось — возвращаем само имя после нормализации как ключ,
-  // а “красивое” имя оставляем как было
-  return { product: rawName, key: n };
+  return { product: rawName, key: normalizedInput };
 }

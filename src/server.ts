@@ -22,6 +22,7 @@ import {
   createMappingRule,
   updateMappingRule,
   removeMappingRule,
+  testMappingRules,
   listImports,
   listAlerts,
   getUnreadAlertsCount,
@@ -32,8 +33,18 @@ import {
   deleteAlert,
   deleteReadAlerts,
   deleteOldImportsKeepLast,
+  listClientLicenses,
+  createClientLicense,
+  updateClientLicense,
+  activateLicense,
+  checkLicense,
+  deactivateLicense,
+  listLicenseActivations,
+  listLicenseEvents,
+  getRunUnmatchedRows,
   type LicenseRegistryInput,
   type MappingRuleInput,
+  type ClientLicenseInput,
 } from "./db/database.js";
 
 import { migrateLicensesJsonToRegistry } from "./db/migrateLicensesRegistry.js";
@@ -98,6 +109,16 @@ function download(res: Response, filePath: string) {
     `attachment; filename="${path.basename(filePath)}"`
   );
   createReadStream(filePath).pipe(res);
+}
+
+function getRequestIp(req: Request): string | undefined {
+  const forwarded = req.headers["x-forwarded-for"];
+
+  if (typeof forwarded === "string") {
+    return forwarded.split(",")[0]?.trim();
+  }
+
+  return req.socket.remoteAddress;
 }
 
 function requireAuth(req: AuthedReq, res: Response, next: NextFunction) {
@@ -375,12 +396,18 @@ async function main() {
       return;
     }
 
+    if (!body?.assignment_type) {
+      res.status(400).json({ ok: false, error: "assignment_type required" });
+      return;
+    }
+
     try {
       const row = upsertLicenseRegistry(db, {
         id: String(body.id),
         product: String(body.product).trim(),
         vendor: body.vendor ? String(body.vendor) : "",
         license_type: body.license_type,
+        assignment_type: body.assignment_type,
         seats_total: Number(body.seats_total) || 0,
         seats_used: Number(body.seats_used) || 0,
         starts_at: body.starts_at ? String(body.starts_at) : "",
@@ -521,6 +548,23 @@ async function main() {
       });
 
       res.json(row);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.post("/api/mapping-rules/test", requireAuth, (req: AuthedReq, res: Response) => {
+    const input = String(req.body?.input ?? "").trim();
+
+    if (!input) {
+      res.status(400).json({ ok: false, error: "input required" });
+      return;
+    }
+
+    try {
+      const result = testMappingRules(db, input);
+      res.json({ ok: true, ...result });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       res.status(500).json({ ok: false, error: msg });
@@ -718,9 +762,204 @@ async function main() {
     }
   });
 
+  // ---------------- SERVER-SIDE LICENSING ----------------
+
+  app.get("/api/client-licenses", requireAuth, (_req: Request, res: Response) => {
+    try {
+      const rows = listClientLicenses(db);
+      res.json(rows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.post("/api/client-licenses", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
+    const body = req.body as Partial<ClientLicenseInput>;
+
+    if (!body?.license_key?.trim()) {
+      res.status(400).json({ ok: false, error: "license_key required" });
+      return;
+    }
+
+    if (!body?.product_name?.trim()) {
+      res.status(400).json({ ok: false, error: "product_name required" });
+      return;
+    }
+
+    if (!body?.customer_name?.trim()) {
+      res.status(400).json({ ok: false, error: "customer_name required" });
+      return;
+    }
+
+    try {
+      const row = createClientLicense(db, {
+        license_key: String(body.license_key).trim(),
+        product_id: Number.isFinite(Number(body.product_id)) ? Number(body.product_id) : undefined,
+        product_name: String(body.product_name).trim(),
+        customer_name: String(body.customer_name).trim(),
+        status: body.status ?? "active",
+        expires_at: body.expires_at ? String(body.expires_at) : undefined,
+        max_activations: Number(body.max_activations) || 1,
+      });
+
+      res.json(row);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.put("/api/client-licenses/:id", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
+    const id = Number(req.params.id);
+    const body = req.body as Partial<ClientLicenseInput>;
+
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(400).json({ ok: false, error: "bad id" });
+      return;
+    }
+
+    try {
+      const row = updateClientLicense(db, id, {
+        ...(body.license_key !== undefined
+          ? { license_key: String(body.license_key).trim() }
+          : {}),
+
+        ...(body.product_id !== undefined && Number.isFinite(Number(body.product_id))
+          ? { product_id: Number(body.product_id) }
+          : {}),
+
+        ...(body.product_name !== undefined
+          ? { product_name: String(body.product_name).trim() }
+          : {}),
+
+        ...(body.customer_name !== undefined
+          ? { customer_name: String(body.customer_name).trim() }
+          : {}),
+
+        ...(body.status !== undefined
+          ? { status: body.status }
+          : {}),
+
+        ...(body.expires_at !== undefined
+          ? { expires_at: String(body.expires_at) }
+          : {}),
+
+        ...(body.max_activations !== undefined
+          ? { max_activations: Number(body.max_activations) || 1 }
+          : {}),
+      });
+
+      res.json(row);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+
+      if (msg === "client license not found") {
+        res.status(404).json({ ok: false, error: msg });
+        return;
+      }
+
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.get("/api/client-licenses/:id/activations", requireAuth, (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(400).json({ ok: false, error: "bad id" });
+      return;
+    }
+
+    try {
+      const rows = listLicenseActivations(db, id);
+      res.json(rows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.get("/api/client-licenses/:id/events", requireAuth, (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+
+    if (!Number.isFinite(id) || id <= 0) {
+      res.status(400).json({ ok: false, error: "bad id" });
+      return;
+    }
+
+    try {
+      const rows = listLicenseEvents(db, id);
+      res.json(rows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+
+  app.get("/api/license-events", requireAuth, (_req: Request, res: Response) => {
+    try {
+      const rows = listLicenseEvents(db);
+      res.json(rows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  // Public API for client applications.
+  // Здесь специально нет requireAuth: это endpoint для внешнего клиентского приложения.
+  app.post("/api/license/activate", (req: Request, res: Response) => {
+    try {
+      const result = activateLicense(db, {
+        license_key: String(req.body?.license_key ?? ""),
+        device_id: String(req.body?.device_id ?? ""),
+        device_name: req.body?.device_name ? String(req.body.device_name) : undefined,
+        ip_address: getRequestIp(req),
+      });
+
+      res.json(result);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.post("/api/license/check", (req: Request, res: Response) => {
+    try {
+      const result = checkLicense(db, {
+        license_key: String(req.body?.license_key ?? ""),
+        device_id: String(req.body?.device_id ?? ""),
+        ip_address: getRequestIp(req),
+      });
+
+      res.json(result);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.post("/api/license/deactivate", (req: Request, res: Response) => {
+    try {
+      const result = deactivateLicense(db, {
+        license_key: String(req.body?.license_key ?? ""),
+        device_id: String(req.body?.device_id ?? ""),
+        ip_address: getRequestIp(req),
+      });
+
+      res.json(result);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
 
   // ---------------- API ----------------
   app.get("/api/health", (_req: Request, res: Response) => res.json({ ok: true }));
+
 
   // историю/результаты можно тоже защитить, но обычно дают читать всем авторизованным.
   // Я защищаю всё, кроме health.
@@ -736,6 +975,23 @@ async function main() {
       return;
     }
     res.json(getRunResults(db, runId));
+  });
+
+  app.get("/api/runs/:id/unmatched", requireAuth, (req: Request, res: Response) => {
+    const runId = Number(req.params.id);
+
+    if (!Number.isFinite(runId) || runId <= 0) {
+      res.status(400).json({ ok: false, error: "bad run id" });
+      return;
+    }
+
+    try {
+      const rows = getRunUnmatchedRows(db, runId);
+      res.json(rows);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
   });
 
   app.delete("/api/runs/:id", requireAuth, requireRole("admin"), (req: Request, res: Response) => {

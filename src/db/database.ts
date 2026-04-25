@@ -36,12 +36,14 @@ export type UserRow = {
 };
 
 export type LicenseType = "perpetual" | "subscription" | "trial";
+export type AssignmentType = "per_install" | "per_user" | "concurrent";
 
 export type LicenseRegistryRow = {
   id: string;
   product: string;
   vendor: string | null;
   license_type: LicenseType;
+  assignment_type: AssignmentType;
   seats_total: number;
   seats_used: number;
   starts_at: string | null;
@@ -56,6 +58,7 @@ export type LicenseRegistryInput = {
   product: string;
   vendor?: string | undefined;
   license_type: LicenseType;
+  assignment_type: AssignmentType;
   seats_total: number;
   seats_used: number;
   starts_at?: string | undefined;
@@ -138,6 +141,97 @@ export type AlertInput = {
   run_id?: number | undefined;
 };
 
+export type UnmatchedRow = {
+  id: number;
+  run_id: number;
+  device: string;
+  software_name: string;
+  software_version: string | null;
+  user: string | null;
+  detected_at: string | null;
+  reason: string;
+};
+
+export type ClientLicenseStatus = "active" | "blocked" | "expired";
+export type LicenseActivationStatus = "active" | "deactivated";
+
+export type LicenseEventType =
+  | "activate_success"
+  | "activate_denied"
+  | "check_success"
+  | "check_denied"
+  | "deactivated"
+  | "blocked"
+  | "expired";
+
+export type ClientLicenseRow = {
+  id: number;
+  license_key: string;
+  product_id: number | null;
+  product_name: string;
+  customer_name: string;
+  status: ClientLicenseStatus;
+  expires_at: string | null;
+  max_activations: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ClientLicenseInput = {
+  license_key: string;
+  product_id?: number | undefined;
+  product_name: string;
+  customer_name: string;
+  status?: ClientLicenseStatus | undefined;
+  expires_at?: string | undefined;
+  max_activations: number;
+};
+
+export type LicenseActivationRow = {
+  id: number;
+  license_id: number;
+  device_id: string;
+  device_name: string | null;
+  activated_at: string;
+  last_check_at: string | null;
+  status: LicenseActivationStatus;
+};
+
+export type LicenseEventRow = {
+  id: number;
+  license_id: number | null;
+  activation_id: number | null;
+  event_type: LicenseEventType;
+  device_id: string | null;
+  ip_address: string | null;
+  message: string | null;
+  created_at: string;
+};
+
+export type LicenseCheckReason =
+  | "not_found"
+  | "blocked"
+  | "expired"
+  | "activation_limit_exceeded"
+  | "device_not_activated"
+  | "deactivated"
+  | "invalid_payload";
+
+export type LicenseValidationResult =
+  | {
+    ok: true;
+    valid: true;
+    license_id: number;
+    activation_id: number;
+    status: ClientLicenseStatus;
+    expires_at: string | null;
+  }
+  | {
+    ok: true;
+    valid: false;
+    reason: LicenseCheckReason;
+  };
+
 export function initDatabase(dbPath: string): DB {
   mkdirSync(dirname(dbPath), { recursive: true });
 
@@ -181,6 +275,24 @@ export function initDatabase(dbPath: string): DB {
     CREATE INDEX IF NOT EXISTS idx_results_run_id ON results(run_id);
     CREATE INDEX IF NOT EXISTS idx_results_product_key ON results(product_key);
 
+        CREATE TABLE IF NOT EXISTS unmatched_rows (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_id INTEGER NOT NULL,
+      device TEXT NOT NULL,
+      software_name TEXT NOT NULL,
+      software_version TEXT,
+      user TEXT,
+      detected_at TEXT,
+      reason TEXT NOT NULL,
+      FOREIGN KEY (run_id) REFERENCES runs(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_unmatched_rows_run_id
+      ON unmatched_rows(run_id);
+
+    CREATE INDEX IF NOT EXISTS idx_unmatched_rows_software_name
+      ON unmatched_rows(software_name);
+
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       login TEXT NOT NULL UNIQUE,
@@ -192,18 +304,19 @@ export function initDatabase(dbPath: string): DB {
     CREATE INDEX IF NOT EXISTS idx_users_login ON users(login);
 
     CREATE TABLE IF NOT EXISTS licenses_registry (
-      id TEXT PRIMARY KEY,
-      product TEXT NOT NULL,
-      vendor TEXT,
-      license_type TEXT NOT NULL,
-      seats_total INTEGER NOT NULL DEFAULT 0 CHECK (seats_total >= 0),
-      seats_used INTEGER NOT NULL DEFAULT 0 CHECK (seats_used >= 0),
-      starts_at TEXT,
-      expires_at TEXT,
-      note TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
+  id TEXT PRIMARY KEY,
+  product TEXT NOT NULL,
+  vendor TEXT,
+  license_type TEXT NOT NULL,
+  assignment_type TEXT NOT NULL DEFAULT 'per_install',
+  seats_total INTEGER NOT NULL DEFAULT 0 CHECK (seats_total >= 0),
+  seats_used INTEGER NOT NULL DEFAULT 0 CHECK (seats_used >= 0),
+  starts_at TEXT,
+  expires_at TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 
     CREATE INDEX IF NOT EXISTS idx_licenses_registry_product
       ON licenses_registry(product);
@@ -283,6 +396,75 @@ CREATE INDEX IF NOT EXISTS idx_alerts_is_read
 
 CREATE INDEX IF NOT EXISTS idx_alerts_run_id
   ON alerts(run_id);
+
+  CREATE TABLE IF NOT EXISTS client_licenses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  license_key TEXT NOT NULL UNIQUE,
+  product_id INTEGER,
+  product_name TEXT NOT NULL,
+  customer_name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  expires_at TEXT,
+  max_activations INTEGER NOT NULL DEFAULT 1 CHECK (max_activations >= 1),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_licenses_key
+  ON client_licenses(license_key);
+
+CREATE INDEX IF NOT EXISTS idx_client_licenses_status
+  ON client_licenses(status);
+
+CREATE INDEX IF NOT EXISTS idx_client_licenses_product_id
+  ON client_licenses(product_id);
+
+CREATE TABLE IF NOT EXISTS license_activations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  license_id INTEGER NOT NULL,
+  device_id TEXT NOT NULL,
+  device_name TEXT,
+  activated_at TEXT NOT NULL,
+  last_check_at TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  FOREIGN KEY (license_id) REFERENCES client_licenses(id) ON DELETE CASCADE,
+  UNIQUE (license_id, device_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_license_activations_license_id
+  ON license_activations(license_id);
+
+CREATE INDEX IF NOT EXISTS idx_license_activations_device_id
+  ON license_activations(device_id);
+
+CREATE INDEX IF NOT EXISTS idx_license_activations_status
+  ON license_activations(status);
+
+CREATE TABLE IF NOT EXISTS license_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  license_id INTEGER,
+  activation_id INTEGER,
+  event_type TEXT NOT NULL,
+  device_id TEXT,
+  ip_address TEXT,
+  message TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (license_id) REFERENCES client_licenses(id) ON DELETE SET NULL,
+  FOREIGN KEY (activation_id) REFERENCES license_activations(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_license_events_license_id
+  ON license_events(license_id);
+
+CREATE INDEX IF NOT EXISTS idx_license_events_activation_id
+  ON license_events(activation_id);
+
+CREATE INDEX IF NOT EXISTS idx_license_events_created_at
+  ON license_events(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_license_events_event_type
+  ON license_events(event_type);
   `);
 
   const columns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
@@ -290,6 +472,18 @@ CREATE INDEX IF NOT EXISTS idx_alerts_run_id
 
   if (!hasRole) {
     db.exec(`ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin';`);
+  }
+
+  const licenseColumns = db
+    .prepare(`PRAGMA table_info(licenses_registry)`)
+    .all() as Array<{ name: string }>;
+
+  const hasAssignmentType = licenseColumns.some((c) => c.name === "assignment_type");
+
+  if (!hasAssignmentType) {
+    db.exec(
+      `ALTER TABLE licenses_registry ADD COLUMN assignment_type TEXT NOT NULL DEFAULT 'per_install';`
+    );
   }
 
   ensureAdminUser(db);
@@ -336,6 +530,7 @@ export function listLicensesRegistry(db: DB): LicenseRegistryRow[] {
       product,
       vendor,
       license_type,
+      assignment_type,
       seats_total,
       seats_used,
       starts_at,
@@ -355,6 +550,7 @@ export function getLicenseRegistryById(db: DB, id: string): LicenseRegistryRow |
       product,
       vendor,
       license_type,
+      assignment_type,
       seats_total,
       seats_used,
       starts_at,
@@ -384,22 +580,24 @@ export function upsertLicenseRegistry(
 
   if (existing) {
     db.prepare(`
-      UPDATE licenses_registry
-      SET
-        product = ?,
-        vendor = ?,
-        license_type = ?,
-        seats_total = ?,
-        seats_used = ?,
-        starts_at = ?,
-        expires_at = ?,
-        note = ?,
-        updated_at = ?
-      WHERE id = ?
-    `).run(
+  UPDATE licenses_registry
+  SET
+    product = ?,
+    vendor = ?,
+    license_type = ?,
+    assignment_type = ?,
+    seats_total = ?,
+    seats_used = ?,
+    starts_at = ?,
+    expires_at = ?,
+    note = ?,
+    updated_at = ?
+  WHERE id = ?
+`).run(
       input.product,
       input.vendor?.trim() || null,
       input.license_type,
+      input.assignment_type,
       Number(input.seats_total) || 0,
       Number(input.seats_used) || 0,
       input.starts_at || null,
@@ -410,25 +608,27 @@ export function upsertLicenseRegistry(
     );
   } else {
     db.prepare(`
-      INSERT INTO licenses_registry (
-        id,
-        product,
-        vendor,
-        license_type,
-        seats_total,
-        seats_used,
-        starts_at,
-        expires_at,
-        note,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+  INSERT INTO licenses_registry (
+    id,
+    product,
+    vendor,
+    license_type,
+    assignment_type,
+    seats_total,
+    seats_used,
+    starts_at,
+    expires_at,
+    note,
+    created_at,
+    updated_at
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`).run(
       input.id,
       input.product,
       input.vendor?.trim() || null,
       input.license_type,
+      input.assignment_type,
       Number(input.seats_total) || 0,
       Number(input.seats_used) || 0,
       input.starts_at || null,
@@ -679,6 +879,64 @@ export function removeMappingRule(db: DB, id: number): { ok: true } {
   return { ok: true };
 }
 
+export type MappingRuleTestResult =
+  | {
+    matched: true;
+    rule: MappingRuleRow;
+    product: ProductRow | null;
+  }
+  | {
+    matched: false;
+    rule: null;
+    product: null;
+  };
+
+function matchesRule(input: string, rule: MappingRuleRow): boolean {
+  const source = input.trim().toLowerCase();
+  const pattern = rule.pattern.trim().toLowerCase();
+  const matchType = (rule.match_type ?? "contains").trim().toLowerCase();
+
+  if (!source || !pattern) return false;
+
+  if (matchType === "exact") {
+    return source === pattern;
+  }
+
+  if (matchType === "regex") {
+    try {
+      const re = new RegExp(rule.pattern, "i");
+      return re.test(input);
+    } catch {
+      return false;
+    }
+  }
+
+  return source.includes(pattern);
+}
+
+export function testMappingRules(db: DB, input: string): MappingRuleTestResult {
+  const rules = listMappingRules(db);
+
+  for (const rule of rules) {
+    if (!matchesRule(input, rule)) continue;
+
+    const product =
+      rule.product_id != null ? getProductById(db, rule.product_id) : null;
+
+    return {
+      matched: true,
+      rule,
+      product,
+    };
+  }
+
+  return {
+    matched: false,
+    rule: null,
+    product: null,
+  };
+}
+
 export function createImportLog(db: DB, input: ImportInput): number {
   const importedAt = new Date().toISOString();
 
@@ -906,6 +1164,7 @@ export function saveResults(db: DB, runId: number, report: ReportRow[]): void {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
+
   const insertMany = db.transaction((rows: ReportRow[]) => {
     for (const r of rows) {
       stmt.run(
@@ -926,4 +1185,698 @@ export function saveResults(db: DB, runId: number, report: ReportRow[]): void {
   });
 
   insertMany(report);
+}
+
+export function saveUnmatchedRows(
+  db: DB,
+  runId: number,
+  rows: Array<{
+    device: string;
+    software_name: string;
+    software_version?: string | null;
+    user?: string | null;
+    detected_at?: string | null;
+    reason: string;
+  }>
+): void {
+  const stmt = db.prepare(`
+    INSERT INTO unmatched_rows (
+      run_id,
+      device,
+      software_name,
+      software_version,
+      user,
+      detected_at,
+      reason
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertMany = db.transaction(
+    (
+      inputRows: Array<{
+        device: string;
+        software_name: string;
+        software_version?: string | null;
+        user?: string | null;
+        detected_at?: string | null;
+        reason: string;
+      }>
+    ) => {
+      for (const row of inputRows) {
+        stmt.run(
+          runId,
+          row.device,
+          row.software_name,
+          row.software_version ?? null,
+          row.user ?? null,
+          row.detected_at ?? null,
+          row.reason
+        );
+      }
+    }
+  );
+
+  insertMany(rows);
+}
+
+export function getRunUnmatchedRows(db: DB, runId: number): UnmatchedRow[] {
+  return db.prepare(`
+    SELECT
+      id,
+      run_id,
+      device,
+      software_name,
+      software_version,
+      user,
+      detected_at,
+      reason
+    FROM unmatched_rows
+    WHERE run_id = ?
+    ORDER BY id ASC
+  `).all(runId) as UnmatchedRow[];
+}
+
+function isExpired(expiresAt: string | null): boolean {
+  if (!expiresAt) return false;
+
+  const expires = new Date(expiresAt);
+  if (Number.isNaN(expires.getTime())) return false;
+
+  return expires.getTime() < Date.now();
+}
+
+function normalizeLicenseKey(key: string): string {
+  return key.trim();
+}
+
+export function createLicenseEvent(
+  db: DB,
+  input: {
+    license_id?: number | null | undefined;
+    activation_id?: number | null | undefined;
+    event_type: LicenseEventType;
+    device_id?: string | null | undefined;
+    ip_address?: string | null | undefined;
+    message?: string | null | undefined;
+  }
+): number {
+  const result = db.prepare(`
+    INSERT INTO license_events (
+      license_id,
+      activation_id,
+      event_type,
+      device_id,
+      ip_address,
+      message,
+      created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    input.license_id ?? null,
+    input.activation_id ?? null,
+    input.event_type,
+    input.device_id?.trim() || null,
+    input.ip_address?.trim() || null,
+    input.message?.trim() || null,
+    new Date().toISOString()
+  );
+
+  return Number(result.lastInsertRowid);
+}
+
+export function listClientLicenses(db: DB): ClientLicenseRow[] {
+  return db.prepare(`
+    SELECT
+      id,
+      license_key,
+      product_id,
+      product_name,
+      customer_name,
+      status,
+      expires_at,
+      max_activations,
+      created_at,
+      updated_at
+    FROM client_licenses
+    ORDER BY updated_at DESC, id DESC
+  `).all() as ClientLicenseRow[];
+}
+
+export function getClientLicenseById(db: DB, id: number): ClientLicenseRow | null {
+  const row = db.prepare(`
+    SELECT
+      id,
+      license_key,
+      product_id,
+      product_name,
+      customer_name,
+      status,
+      expires_at,
+      max_activations,
+      created_at,
+      updated_at
+    FROM client_licenses
+    WHERE id = ?
+  `).get(id) as ClientLicenseRow | undefined;
+
+  return row ?? null;
+}
+
+export function getClientLicenseByKey(db: DB, licenseKey: string): ClientLicenseRow | null {
+  const row = db.prepare(`
+    SELECT
+      id,
+      license_key,
+      product_id,
+      product_name,
+      customer_name,
+      status,
+      expires_at,
+      max_activations,
+      created_at,
+      updated_at
+    FROM client_licenses
+    WHERE license_key = ?
+  `).get(normalizeLicenseKey(licenseKey)) as ClientLicenseRow | undefined;
+
+  return row ?? null;
+}
+
+export function createClientLicense(
+  db: DB,
+  input: ClientLicenseInput
+): ClientLicenseRow {
+  const now = new Date().toISOString();
+  const licenseKey = normalizeLicenseKey(input.license_key);
+
+  if (!licenseKey) throw new Error("license_key is required");
+  if (!input.product_name.trim()) throw new Error("product_name is required");
+  if (!input.customer_name.trim()) throw new Error("customer_name is required");
+
+  const maxActivations = Math.max(1, Number(input.max_activations) || 1);
+
+  db.prepare(`
+    INSERT INTO client_licenses (
+      license_key,
+      product_id,
+      product_name,
+      customer_name,
+      status,
+      expires_at,
+      max_activations,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    licenseKey,
+    input.product_id ?? null,
+    input.product_name.trim(),
+    input.customer_name.trim(),
+    input.status ?? "active",
+    input.expires_at || null,
+    maxActivations,
+    now,
+    now
+  );
+
+  const row = getClientLicenseByKey(db, licenseKey);
+  if (!row) throw new Error("client license create failed");
+
+  return row;
+}
+
+export function updateClientLicense(
+  db: DB,
+  id: number,
+  input: Partial<ClientLicenseInput>
+): ClientLicenseRow {
+  const existing = getClientLicenseById(db, id);
+  if (!existing) throw new Error("client license not found");
+
+  const now = new Date().toISOString();
+
+  const licenseKey =
+    input.license_key !== undefined
+      ? normalizeLicenseKey(input.license_key)
+      : existing.license_key;
+
+  if (!licenseKey) throw new Error("license_key is required");
+
+  db.prepare(`
+    UPDATE client_licenses
+    SET
+      license_key = ?,
+      product_id = ?,
+      product_name = ?,
+      customer_name = ?,
+      status = ?,
+      expires_at = ?,
+      max_activations = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(
+    licenseKey,
+    input.product_id !== undefined ? input.product_id : existing.product_id,
+    input.product_name !== undefined ? input.product_name.trim() : existing.product_name,
+    input.customer_name !== undefined ? input.customer_name.trim() : existing.customer_name,
+    input.status ?? existing.status,
+    input.expires_at !== undefined ? input.expires_at || null : existing.expires_at,
+    input.max_activations !== undefined
+      ? Math.max(1, Number(input.max_activations) || 1)
+      : existing.max_activations,
+    now,
+    id
+  );
+
+  const row = getClientLicenseById(db, id);
+  if (!row) throw new Error("client license update failed");
+
+  return row;
+}
+
+function getActiveActivation(
+  db: DB,
+  licenseId: number,
+  deviceId: string
+): LicenseActivationRow | null {
+  const row = db.prepare(`
+    SELECT
+      id,
+      license_id,
+      device_id,
+      device_name,
+      activated_at,
+      last_check_at,
+      status
+    FROM license_activations
+    WHERE license_id = ?
+      AND device_id = ?
+    LIMIT 1
+  `).get(licenseId, deviceId.trim()) as LicenseActivationRow | undefined;
+
+  return row ?? null;
+}
+
+function countActiveActivations(db: DB, licenseId: number): number {
+  const row = db.prepare(`
+    SELECT COUNT(*) as cnt
+    FROM license_activations
+    WHERE license_id = ?
+      AND status = 'active'
+  `).get(licenseId) as { cnt: number } | undefined;
+
+  return Number(row?.cnt ?? 0);
+}
+
+export function activateLicense(
+  db: DB,
+  input: {
+    license_key: string;
+    device_id: string;
+    device_name?: string | undefined;
+    ip_address?: string | undefined;
+  }
+): LicenseValidationResult {
+  const licenseKey = normalizeLicenseKey(input.license_key);
+  const deviceId = input.device_id.trim();
+
+  if (!licenseKey || !deviceId) {
+    createLicenseEvent(db, {
+      event_type: "activate_denied",
+      device_id: deviceId || null,
+      ip_address: input.ip_address,
+      message: "invalid_payload",
+    });
+
+    return { ok: true, valid: false, reason: "invalid_payload" };
+  }
+
+  const license = getClientLicenseByKey(db, licenseKey);
+
+  if (!license) {
+    createLicenseEvent(db, {
+      event_type: "activate_denied",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "not_found",
+    });
+
+    return { ok: true, valid: false, reason: "not_found" };
+  }
+
+  if (license.status === "blocked") {
+    createLicenseEvent(db, {
+      license_id: license.id,
+      event_type: "activate_denied",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "blocked",
+    });
+
+    return { ok: true, valid: false, reason: "blocked" };
+  }
+
+  if (license.status === "expired" || isExpired(license.expires_at)) {
+    createLicenseEvent(db, {
+      license_id: license.id,
+      event_type: "activate_denied",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "expired",
+    });
+
+    return { ok: true, valid: false, reason: "expired" };
+  }
+
+  const existingActivation = getActiveActivation(db, license.id, deviceId);
+
+  if (existingActivation?.status === "active") {
+    db.prepare(`
+      UPDATE license_activations
+      SET last_check_at = ?
+      WHERE id = ?
+    `).run(new Date().toISOString(), existingActivation.id);
+
+    createLicenseEvent(db, {
+      license_id: license.id,
+      activation_id: existingActivation.id,
+      event_type: "activate_success",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "device already activated",
+    });
+
+    return {
+      ok: true,
+      valid: true,
+      license_id: license.id,
+      activation_id: existingActivation.id,
+      status: license.status,
+      expires_at: license.expires_at,
+    };
+  }
+
+  if (existingActivation?.status === "deactivated") {
+    createLicenseEvent(db, {
+      license_id: license.id,
+      activation_id: existingActivation.id,
+      event_type: "activate_denied",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "deactivated",
+    });
+
+    return { ok: true, valid: false, reason: "deactivated" };
+  }
+
+  const activeCount = countActiveActivations(db, license.id);
+
+  if (activeCount >= license.max_activations) {
+    createLicenseEvent(db, {
+      license_id: license.id,
+      event_type: "activate_denied",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "activation_limit_exceeded",
+    });
+
+    return { ok: true, valid: false, reason: "activation_limit_exceeded" };
+  }
+
+  const now = new Date().toISOString();
+
+  const result = db.prepare(`
+    INSERT INTO license_activations (
+      license_id,
+      device_id,
+      device_name,
+      activated_at,
+      last_check_at,
+      status
+    )
+    VALUES (?, ?, ?, ?, ?, 'active')
+  `).run(
+    license.id,
+    deviceId,
+    input.device_name?.trim() || null,
+    now,
+    now
+  );
+
+  const activationId = Number(result.lastInsertRowid);
+
+  createLicenseEvent(db, {
+    license_id: license.id,
+    activation_id: activationId,
+    event_type: "activate_success",
+    device_id: deviceId,
+    ip_address: input.ip_address,
+    message: "activated",
+  });
+
+  return {
+    ok: true,
+    valid: true,
+    license_id: license.id,
+    activation_id: activationId,
+    status: license.status,
+    expires_at: license.expires_at,
+  };
+}
+
+export function checkLicense(
+  db: DB,
+  input: {
+    license_key: string;
+    device_id: string;
+    ip_address?: string | undefined;
+  }
+): LicenseValidationResult {
+  const licenseKey = normalizeLicenseKey(input.license_key);
+  const deviceId = input.device_id.trim();
+
+  if (!licenseKey || !deviceId) {
+    createLicenseEvent(db, {
+      event_type: "check_denied",
+      device_id: deviceId || null,
+      ip_address: input.ip_address,
+      message: "invalid_payload",
+    });
+
+    return { ok: true, valid: false, reason: "invalid_payload" };
+  }
+
+  const license = getClientLicenseByKey(db, licenseKey);
+
+  if (!license) {
+    createLicenseEvent(db, {
+      event_type: "check_denied",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "not_found",
+    });
+
+    return { ok: true, valid: false, reason: "not_found" };
+  }
+
+  if (license.status === "blocked") {
+    createLicenseEvent(db, {
+      license_id: license.id,
+      event_type: "check_denied",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "blocked",
+    });
+
+    return { ok: true, valid: false, reason: "blocked" };
+  }
+
+  if (license.status === "expired" || isExpired(license.expires_at)) {
+    createLicenseEvent(db, {
+      license_id: license.id,
+      event_type: "check_denied",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "expired",
+    });
+
+    return { ok: true, valid: false, reason: "expired" };
+  }
+
+  const activation = getActiveActivation(db, license.id, deviceId);
+
+  if (!activation) {
+    createLicenseEvent(db, {
+      license_id: license.id,
+      event_type: "check_denied",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "device_not_activated",
+    });
+
+    return { ok: true, valid: false, reason: "device_not_activated" };
+  }
+
+  if (activation.status === "deactivated") {
+    createLicenseEvent(db, {
+      license_id: license.id,
+      activation_id: activation.id,
+      event_type: "check_denied",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "deactivated",
+    });
+
+    return { ok: true, valid: false, reason: "deactivated" };
+  }
+
+  db.prepare(`
+    UPDATE license_activations
+    SET last_check_at = ?
+    WHERE id = ?
+  `).run(new Date().toISOString(), activation.id);
+
+  createLicenseEvent(db, {
+    license_id: license.id,
+    activation_id: activation.id,
+    event_type: "check_success",
+    device_id: deviceId,
+    ip_address: input.ip_address,
+    message: "valid",
+  });
+
+  return {
+    ok: true,
+    valid: true,
+    license_id: license.id,
+    activation_id: activation.id,
+    status: license.status,
+    expires_at: license.expires_at,
+  };
+}
+
+export function deactivateLicense(
+  db: DB,
+  input: {
+    license_key: string;
+    device_id: string;
+    ip_address?: string | undefined;
+  }
+): { ok: true; deactivated: boolean } {
+  const licenseKey = normalizeLicenseKey(input.license_key);
+  const deviceId = input.device_id.trim();
+
+  if (!licenseKey || !deviceId) {
+    createLicenseEvent(db, {
+      event_type: "deactivated",
+      device_id: deviceId || null,
+      ip_address: input.ip_address,
+      message: "invalid_payload",
+    });
+
+    return { ok: true, deactivated: false };
+  }
+
+  const license = getClientLicenseByKey(db, licenseKey);
+
+  if (!license) {
+    createLicenseEvent(db, {
+      event_type: "deactivated",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "license not found",
+    });
+
+    return { ok: true, deactivated: false };
+  }
+
+  const activation = getActiveActivation(db, license.id, deviceId);
+
+  if (!activation) {
+    createLicenseEvent(db, {
+      license_id: license.id,
+      event_type: "deactivated",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "activation not found",
+    });
+
+    return { ok: true, deactivated: false };
+  }
+
+  db.prepare(`
+    UPDATE license_activations
+    SET status = 'deactivated'
+    WHERE id = ?
+  `).run(activation.id);
+
+  createLicenseEvent(db, {
+    license_id: license.id,
+    activation_id: activation.id,
+    event_type: "deactivated",
+    device_id: deviceId,
+    ip_address: input.ip_address,
+    message: "device deactivated",
+  });
+
+  return { ok: true, deactivated: true };
+}
+
+export function listLicenseActivations(
+  db: DB,
+  licenseId: number
+): LicenseActivationRow[] {
+  return db.prepare(`
+    SELECT
+      id,
+      license_id,
+      device_id,
+      device_name,
+      activated_at,
+      last_check_at,
+      status
+    FROM license_activations
+    WHERE license_id = ?
+    ORDER BY activated_at DESC, id DESC
+  `).all(licenseId) as LicenseActivationRow[];
+}
+
+export function listLicenseEvents(
+  db: DB,
+  licenseId?: number
+): LicenseEventRow[] {
+  if (licenseId !== undefined) {
+    return db.prepare(`
+      SELECT
+        id,
+        license_id,
+        activation_id,
+        event_type,
+        device_id,
+        ip_address,
+        message,
+        created_at
+      FROM license_events
+      WHERE license_id = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT 200
+    `).all(licenseId) as LicenseEventRow[];
+  }
+
+  return db.prepare(`
+    SELECT
+      id,
+      license_id,
+      activation_id,
+      event_type,
+      device_id,
+      ip_address,
+      message,
+      created_at
+    FROM license_events
+    ORDER BY created_at DESC, id DESC
+    LIMIT 200
+  `).all() as LicenseEventRow[];
 }

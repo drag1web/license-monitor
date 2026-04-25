@@ -12,6 +12,7 @@ import Imports from "./pages/Imports";
 import Dictionaries from "./pages/Dictionaries";
 import DictionariesProducts from "./pages/DictionariesProducts";
 import DictionariesMapping from "./pages/DictionariesMapping";
+import ClientLicenses from "./pages/ClientLicenses";
 
 import { Protected } from "./Protected";
 import { useAuth } from "./auth/AuthContext";
@@ -91,6 +92,15 @@ function AuthedRoutes() {
             element={
               <ProtectedShell title="Реестр лицензий">
                 <Licenses />
+              </ProtectedShell>
+            }
+          />
+
+          <Route
+            path="/client-licenses"
+            element={
+              <ProtectedShell title="Клиентские лицензии">
+                <ClientLicenses />
               </ProtectedShell>
             }
           />

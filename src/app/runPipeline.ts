@@ -8,9 +8,12 @@ import {
   initDatabase,
   saveRun,
   saveResults,
+  saveUnmatchedRows,
   createImportLog,
   createAlert,
   deleteUnreadAlertsByType,
+  listMappingRules,
+  listLicensesRegistry,
 } from "../db/database.js";
 
 export type Config = {
@@ -30,12 +33,28 @@ export type Config = {
   legacyLicensesJsonPath?: string;
 };
 
+type CsvMappingRow = {
+  pattern: string;
+  canonical_product: string;
+  match_type?: string | null;
+};
+
+function registryToPipelineLicenses(
+  rows: ReturnType<typeof listLicensesRegistry>
+): LicenseRow[] {
+  return rows.map((row) => ({
+    product_name: row.product,
+    license_type: row.license_type,
+    count: String(Math.max(0, Number(row.seats_total) || 0)),
+    end_date: row.expires_at || "",
+  }));
+}
+
 export async function runPipeline(config: Config): Promise<{ runId: number }> {
   const db = initDatabase(config.dbPath);
 
-  // 1) load
+  // 1) load installations
   let installsRaw: InstallationRow[] = [];
-  let licensesRaw: LicenseRow[] = [];
 
   try {
     installsRaw = await readCsv<InstallationRow>(config.installationsPath);
@@ -54,24 +73,37 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
     throw e;
   }
 
+  // 2) load licenses from DB registry
+  let licensesRaw: LicenseRow[] = [];
+
   try {
-    licensesRaw = await readCsv<LicenseRow>(config.licensesPath);
+    const registryRows = listLicensesRegistry(db);
+    licensesRaw = registryToPipelineLicenses(registryRows);
+
+    createImportLog(db, {
+      import_type: "licenses",
+      file_name: "licenses_registry",
+      source_path: "sqlite:licenses_registry",
+      rows_count: registryRows.length,
+      status: "success",
+      comment: `loaded from registry: ${registryRows.length}`,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
 
     createImportLog(db, {
       import_type: "licenses",
-      file_name: "licenses.csv",
-      source_path: config.licensesPath,
+      file_name: "licenses_registry",
+      source_path: "sqlite:licenses_registry",
       rows_count: 0,
       status: "failed",
-      comment: `csv read error: ${msg}`,
+      comment: `registry read error: ${msg}`,
     });
 
     throw e;
   }
 
-  // 2) validate
+  // 3) validate
   const vi = validateInstallations(installsRaw);
   const vl = validateLicenses(licensesRaw);
 
@@ -89,8 +121,8 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
 
   createImportLog(db, {
     import_type: "licenses",
-    file_name: "licenses.csv",
-    source_path: config.licensesPath,
+    file_name: "licenses_registry",
+    source_path: "sqlite:licenses_registry",
     rows_count: licensesRaw.length,
     status: vl.bad.length > 0 ? "partial" : "success",
     comment:
@@ -108,11 +140,11 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
     );
   }
 
-  // 3) mapping
-  let mappingRows: { pattern: string; canonical_product: string }[] = [];
+  // 4) mapping: CSV + DB rules
+  let mappingRows: CsvMappingRow[] = [];
 
   try {
-    mappingRows = await readCsv<{ pattern: string; canonical_product: string }>(config.mappingPath);
+    mappingRows = await readCsv<CsvMappingRow>(config.mappingPath);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
 
@@ -128,7 +160,14 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
     throw e;
   }
 
-  const rules = buildRules(mappingRows);
+  const dbMappingRows = listMappingRules(db).map((r) => ({
+    pattern: r.pattern,
+    canonical_product: r.canonical_product,
+    match_type: r.match_type,
+  }));
+
+  const mergedMappingRows = [...mappingRows, ...dbMappingRows];
+  const rules = buildRules(mergedMappingRows);
 
   createImportLog(db, {
     import_type: "mapping",
@@ -136,14 +175,13 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
     source_path: config.mappingPath,
     rows_count: mappingRows.length,
     status: "success",
-    comment: `rules built: ${mappingRows.length}`,
+    comment: `csv rules: ${mappingRows.length}, db rules: ${dbMappingRows.length}, merged: ${mergedMappingRows.length}`,
   });
 
-
-  // 4) report
+  // 5) report
   const { report, unmatched } = buildReport(vi.good, vl.good, rules, config.expiresDays);
 
-  // 5) CSV outputs
+  // 6) CSV outputs
   await writeCsv(
     config.reportPath,
     [
@@ -187,10 +225,10 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
     ])
   );
 
-  // 6) Excel
+  // 7) Excel
   await writeReportXlsx(config.xlsxReportPath, report, unmatched, config.expiresDays);
 
-  // 7) DB
+  // 8) DB
   const runAt = new Date().toISOString();
   const runId = saveRun(db, {
     run_at: runAt,
@@ -201,6 +239,7 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
   });
 
   saveResults(db, runId, report);
+  saveUnmatchedRows(db, runId, unmatched);
 
   deleteUnreadAlertsByType(db, ["deficit", "expiring", "unmatched"]);
 

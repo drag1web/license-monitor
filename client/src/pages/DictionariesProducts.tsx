@@ -24,6 +24,18 @@ import {
   deleteProduct,
   type ProductRow,
 } from "../api";
+import {
+  Table,
+  TableInner,
+  TableScroll,
+  TableCaption,
+  TableEmpty,
+  TableSkeleton,
+  THead,
+  TBody,
+  Tr,
+  Td,
+} from "../ui/Table";
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
@@ -39,6 +51,37 @@ function formatDate(value?: string | null) {
 
 function normalizeText(value?: string | null) {
   return (value ?? "").trim();
+}
+
+function MiniStat({
+  label,
+  value,
+  tone = "none",
+  icon,
+}: {
+  label: string;
+  value: number;
+  tone?: "ok" | "warn" | "bad" | "none";
+  icon?: React.ReactNode;
+}) {
+  const cls =
+    tone === "ok"
+      ? "border-emerald-300/20 bg-emerald-500/10 text-emerald-100"
+      : tone === "warn"
+      ? "border-amber-300/20 bg-amber-500/10 text-amber-100"
+      : tone === "bad"
+      ? "border-rose-300/20 bg-rose-500/10 text-rose-100"
+      : "border-white/10 bg-white/[0.03] text-white/80";
+
+  return (
+    <div className={cn("rounded-2xl border px-4 py-3", cls)}>
+      <div className="flex items-center gap-2 text-[11px] opacity-80">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+    </div>
+  );
 }
 
 export default function DictionariesProducts() {
@@ -245,86 +288,59 @@ export default function DictionariesProducts() {
   }, [items]);
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card
-          className={cn(
-            "rounded-[24px] border border-white/[0.08] bg-white/[0.03]",
-            "p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]"
-          )}
-        >
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/10 p-2.5 text-cyan-100/90">
-              <Boxes className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-sm text-white/55">Продукты</div>
-              <div className="text-xl font-semibold text-white/92">
-                {loading ? "…" : items.length}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card
-          className={cn(
-            "rounded-[24px] border border-white/[0.08] bg-white/[0.03]",
-            "p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]"
-          )}
-        >
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-violet-300/15 bg-violet-300/10 p-2.5 text-violet-100/90">
-              <Building2 className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-sm text-white/55">Вендоры</div>
-              <div className="text-xl font-semibold text-white/92">
-                {loading ? "…" : vendorsCount}
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card
-          className={cn(
-            "rounded-[24px] border border-white/[0.08] bg-white/[0.03]",
-            "p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]"
-          )}
-        >
-          <div className="flex items-center gap-3">
-            <div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/10 p-2.5 text-emerald-100/90">
-              <Tags className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-sm text-white/55">Категории</div>
-              <div className="text-xl font-semibold text-white/92">
-                {loading ? "…" : categoriesCount}
-              </div>
-            </div>
-          </div>
-        </Card>
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <MiniStat
+          label="Продукты"
+          value={loading ? 0 : items.length}
+          tone="none"
+          icon={<Boxes className="h-4 w-4" />}
+        />
+        <MiniStat
+          label="Вендоры"
+          value={loading ? 0 : vendorsCount}
+          tone="ok"
+          icon={<Building2 className="h-4 w-4" />}
+        />
+        <MiniStat
+          label="Категории"
+          value={loading ? 0 : categoriesCount}
+          tone="warn"
+          icon={<Tags className="h-4 w-4" />}
+        />
       </div>
 
       <Card
         className={cn(
-          "rounded-[28px] border border-white/[0.08]",
-          "bg-gradient-to-b from-slate-950/72 via-slate-950/48 to-slate-950/28",
-          "backdrop-blur-xl shadow-[0_24px_90px_rgba(0,0,0,0.40)]"
+          "rounded-3xl p-4",
+          "border border-white/[0.08]",
+          "bg-white/[0.02]"
         )}
       >
-        <div className="p-5 md:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-1 items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
-              <Search className="h-4 w-4 text-white/45" />
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2 text-white/70">
+            <Search className="h-4 w-4" />
+            <div className="text-sm font-semibold">Поиск и действия</div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
+            <div
+              className={cn(
+                "flex items-center gap-2 rounded-2xl px-3.5 py-2",
+                "bg-white/[0.03] border border-white/[0.08]",
+                "focus-within:border-cyan-200/30 focus-within:shadow-[0_0_0_4px_rgba(34,211,238,0.10)]"
+              )}
+            >
+              <Search className="h-4 w-4 shrink-0 text-white/45" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Поиск по названию, вендору или категории"
-                className="w-full bg-transparent text-sm text-white/80 outline-none placeholder:text-white/35"
+                placeholder="Поиск по названию, вендору или категории…"
+                className="w-full min-w-0 bg-transparent outline-none text-sm text-white/85 placeholder:text-white/35"
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <Button
                 variant="ghost"
                 onClick={() => void load()}
@@ -346,136 +362,128 @@ export default function DictionariesProducts() {
             </div>
           </div>
 
-          {error && (
-            <div className="mt-5 flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100/90">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <div>{error}</div>
-            </div>
-          )}
-
-          <div className="mt-5 overflow-hidden rounded-[24px] border border-white/[0.08]">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-white/[0.04] text-white/55">
-                  <tr>
-                    <th className="px-4 py-3 text-left font-medium">Название</th>
-                    <th className="px-4 py-3 text-left font-medium">Вендор</th>
-                    <th className="px-4 py-3 text-left font-medium">Категория</th>
-                    <th className="px-4 py-3 text-left font-medium">Создан</th>
-                    <th className="px-4 py-3 text-left font-medium">Обновлён</th>
-                    <th className="px-4 py-3 text-right font-medium">Действия</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {loading ? (
-                    Array.from({ length: 6 }).map((_, idx) => (
-                      <tr key={idx} className="border-t border-white/[0.06]">
-                        <td className="px-4 py-4">
-                          <div className="h-4 w-48 animate-pulse rounded bg-white/[0.06]" />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="h-4 w-28 animate-pulse rounded bg-white/[0.06]" />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="h-4 w-24 animate-pulse rounded bg-white/[0.06]" />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="h-4 w-32 animate-pulse rounded bg-white/[0.06]" />
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="h-4 w-32 animate-pulse rounded bg-white/[0.06]" />
-                        </td>
-                        <td className="px-4 py-4 text-right">
-                          <div className="ml-auto h-8 w-24 animate-pulse rounded-xl bg-white/[0.06]" />
-                        </td>
-                      </tr>
-                    ))
-                  ) : filtered.length === 0 ? (
-                    <tr className="border-t border-white/[0.06]">
-                      <td colSpan={6} className="px-4 py-12">
-                        <div className="flex flex-col items-center justify-center gap-3 text-center">
-                          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3 text-white/55">
-                            <PackageSearch className="h-6 w-6" />
-                          </div>
-
-                          <div>
-                            <div className="text-sm font-medium text-white/80">
-                              {items.length === 0
-                                ? "Справочник продуктов пока пуст"
-                                : "Ничего не найдено по текущему запросу"}
-                            </div>
-                            <div className="mt-1 text-sm text-white/45">
-                              {items.length === 0
-                                ? "После добавления или загрузки продуктов они появятся здесь."
-                                : "Попробуй изменить строку поиска или очистить фильтр."}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    filtered.map((item) => (
-                      <tr
-                        key={item.id}
-                        className="border-t border-white/[0.06] transition hover:bg-white/[0.03]"
-                      >
-                        <td className="px-4 py-3.5 text-white/88">
-                          <div className="font-medium">{item.name}</div>
-                        </td>
-
-                        <td className="px-4 py-3.5 text-white/65">
-                          {item.vendor || "—"}
-                        </td>
-
-                        <td className="px-4 py-3.5 text-white/65">
-                          {item.category || "—"}
-                        </td>
-
-                        <td className="px-4 py-3.5 text-white/55">
-                          {formatDate(item.created_at)}
-                        </td>
-
-                        <td className="px-4 py-3.5 text-white/55">
-                          {formatDate(item.updated_at)}
-                        </td>
-
-                        <td className="px-4 py-3.5">
-                          <div className="flex justify-end gap-2">
-                            {canManage ? (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => openEditModal(item)}
-                                >
-                                  Редактировать
-                                </Button>
-
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={deleteBusy}
-                                  onClick={() => void handleDeleteProduct(item)}
-                                >
-                                  Удалить
-                                </Button>
-                              </>
-                            ) : (
-                              <span className="text-xs text-white/35">
-                                Только просмотр
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+          <div className="text-[12px] text-white/45">
+            Показано:{" "}
+            <span className="font-semibold text-white/70">{filtered.length}</span>{" "}
+            из <span className="font-semibold text-white/70">{items.length}</span>
           </div>
         </div>
+      </Card>
+
+      {error && (
+        <div className="flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100/90">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>{error}</div>
+        </div>
+      )}
+
+      <Card className="p-0 rounded-3xl overflow-hidden border border-white/[0.08] bg-white/[0.02]">
+        <Table>
+          <TableCaption
+            title="Справочник продуктов"
+            description="Канонические продукты, используемые в правилах сопоставления и других частях системы."
+            right={
+              <div className="text-[11px] text-white/45">
+                {loading ? "Загружаю…" : `Показано: ${filtered.length} / ${items.length}`}
+              </div>
+            }
+          />
+
+          {loading ? (
+            <TableSkeleton rows={6} cols={6} />
+          ) : filtered.length === 0 ? (
+            <TableEmpty
+              title={
+                items.length === 0
+                  ? "Справочник продуктов пока пуст"
+                  : "Ничего не найдено"
+              }
+              description={
+                items.length === 0
+                  ? "После добавления продуктов они появятся в этой таблице."
+                  : "Попробуй изменить строку поиска."
+              }
+            />
+          ) : (
+            <TableScroll className="max-h-[70vh]">
+              <TableInner stickyHeader density="comfortable">
+                <THead>
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                      Название
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                      Вендор
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                      Категория
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                      Создан
+                    </th>
+                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                      Обновлён
+                    </th>
+                    <th className="px-4 py-3 text-right font-medium text-white/55">
+                      Действия
+                    </th>
+                  </tr>
+                </THead>
+
+                <TBody>
+                  {filtered.map((item) => (
+                    <Tr key={item.id}>
+                      <Td className="font-semibold text-white/88">
+                        {item.name}
+                      </Td>
+
+                      <Td className="text-white/65">{item.vendor || "—"}</Td>
+
+                      <Td className="text-white/65">{item.category || "—"}</Td>
+
+                      <Td className="text-white/55">
+                        {formatDate(item.created_at)}
+                      </Td>
+
+                      <Td className="text-white/55">
+                        {formatDate(item.updated_at)}
+                      </Td>
+
+                      <Td>
+                        <div className="flex justify-end gap-2">
+                          {canManage ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEditModal(item)}
+                              >
+                                Редактировать
+                              </Button>
+
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={deleteBusy}
+                                onClick={() => void handleDeleteProduct(item)}
+                              >
+                                Удалить
+                              </Button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-white/35">
+                              Только просмотр
+                            </span>
+                          )}
+                        </div>
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </TableInner>
+            </TableScroll>
+          )}
+        </Table>
       </Card>
 
       {createOpen && (

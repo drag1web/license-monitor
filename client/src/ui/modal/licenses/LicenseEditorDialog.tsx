@@ -14,6 +14,7 @@ export type Draft = {
   product: string;
   vendor: string;
   license_type: LicenseRow["license_type"];
+  assignment_type: LicenseRow["assignment_type"];
   seats_total: number;
   seats_used: number;
   starts_at: string;
@@ -50,6 +51,7 @@ export function makeEmptyDraft(): Draft {
     product: "",
     vendor: "",
     license_type: "subscription",
+    assignment_type: "per_install",
     seats_total: 10,
     seats_used: 0,
     starts_at: "",
@@ -64,6 +66,7 @@ export function fromRow(r: LicenseRow): Draft {
     product: r.product ?? "",
     vendor: r.vendor ?? "",
     license_type: r.license_type ?? "subscription",
+    assignment_type: r.assignment_type ?? "per_install",
     seats_total: safeNum(r.seats_total),
     seats_used: safeNum(r.seats_used),
     starts_at: r.starts_at ?? "",
@@ -78,6 +81,7 @@ export function toRow(d: Draft): LicenseRow {
     product: d.product.trim(),
     vendor: d.vendor.trim() || undefined,
     license_type: d.license_type,
+    assignment_type: d.assignment_type,
     seats_total: Math.max(0, safeNum(d.seats_total)),
     seats_used: Math.max(0, safeNum(d.seats_used)),
     starts_at: d.starts_at || undefined,
@@ -269,7 +273,7 @@ export function LicenseEditorDialog({
               </div>
 
               <div className={S.fieldCard}>
-                <div className={S.label}>License type</div>
+                <div className={S.label}>Commercial type</div>
                 <div className={S.hint}>perpetual / subscription / trial</div>
                 <select
                   value={draft.license_type}
@@ -279,6 +283,25 @@ export function LicenseEditorDialog({
                   <option value="subscription">subscription</option>
                   <option value="perpetual">perpetual</option>
                   <option value="trial">trial</option>
+                </select>
+              </div>
+
+              <div className={S.fieldCard}>
+                <div className={S.label}>Compliance type</div>
+                <div className={S.hint}>Как считать demand в проверках: per_install / per_user / concurrent</div>
+                <select
+                  value={draft.assignment_type}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      assignment_type: e.target.value as LicenseRow["assignment_type"],
+                    }))
+                  }
+                  className={cn(S.input, "mt-2")}
+                >
+                  <option value="per_install">per_install</option>
+                  <option value="per_user">per_user</option>
+                  <option value="concurrent">concurrent</option>
                 </select>
               </div>
 
@@ -340,7 +363,7 @@ export function LicenseEditorDialog({
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-[12px] text-white/45">
                 <AlertTriangle className="h-4 w-4 text-white/40" />
-                Product обязателен. Даты — YYYY-MM-DD. Expires ≥ Starts.
+                Product обязателен. Compliance type влияет на расчёт demand в проверках. Даты — YYYY-MM-DD. Expires ≥ Starts.
               </div>
 
               <div className="flex items-center gap-2">

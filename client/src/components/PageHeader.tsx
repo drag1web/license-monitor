@@ -12,6 +12,7 @@ import {
   LogOut,
   FileInput,
   BookOpen,
+  Server,
 } from "lucide-react";
 
 import { Card } from "../ui/Card";
@@ -42,6 +43,12 @@ const TABS: Tab[] = [
     label: "Лицензии",
     icon: <KeyRound className="h-4 w-4" />,
     match: (p) => p.startsWith("/licenses"),
+  },
+  {
+    to: "/client-licenses",
+    label: "Ключи",
+    icon: <Server className="h-4 w-4" />,
+    match: (p) => p.startsWith("/client-licenses"),
   },
   {
     to: "/imports",

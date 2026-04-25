@@ -107,6 +107,34 @@ export type UpdateMappingRuleInput = {
   match_type?: string;
 };
 
+export type MappingRuleTestResponse =
+  | {
+    ok: true;
+    matched: true;
+    rule: MappingRuleRow;
+    product: ProductRow | null;
+  }
+  | {
+    ok: true;
+    matched: false;
+    rule: null;
+    product: null;
+  }
+  | {
+    ok: false;
+    error: string;
+  };
+
+export type UnmatchedRow = {
+  id: number;
+  run_id: number;
+  device: string;
+  software_name: string;
+  software_version: string | null;
+  user: string | null;
+  detected_at: string | null;
+  reason: string;
+};
 /* ------------------------------------------
  * HTTP helper (sessions-safe)
  * ------------------------------------------ */
@@ -187,6 +215,10 @@ export function getRuns(): Promise<RunRow[]> {
 
 export function getRunResults(id: number): Promise<ResultRow[]> {
   return j<ResultRow[]>(`/api/runs/${id}`);
+}
+
+export function getRunUnmatched(id: number): Promise<UnmatchedRow[]> {
+  return j<UnmatchedRow[]>(`/api/runs/${id}/unmatched`);
 }
 
 export function runCheck(): Promise<{ ok: boolean; runId?: number; error?: string }> {
@@ -304,6 +336,13 @@ export function deleteMappingRule(id: number): Promise<{ ok: boolean }> {
   });
 }
 
+export function testMappingRule(input: string): Promise<MappingRuleTestResponse> {
+  return j<MappingRuleTestResponse>("/api/mapping-rules/test", {
+    method: "POST",
+    body: JSON.stringify({ input }),
+  });
+}
+
 export async function uploadImport(
   importType: "installations" | "licenses" | "mapping",
   file: File
@@ -329,6 +368,145 @@ export const download = {
   unmatchedCsv: "/download/unmatched.csv",
   badRowsCsv: "/download/bad_rows.csv",
 } as const;
+
+/* ------------------------------------------
+ * Server-side client licensing API (HTTP)
+ * ------------------------------------------ */
+
+export type ClientLicenseStatus = "active" | "blocked" | "expired";
+export type LicenseActivationStatus = "active" | "deactivated";
+
+export type ClientLicenseRow = {
+  id: number;
+  license_key: string;
+  product_id: number | null;
+  product_name: string;
+  customer_name: string;
+  status: ClientLicenseStatus;
+  expires_at: string | null;
+  max_activations: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ClientLicenseInput = {
+  license_key: string;
+  product_id?: number;
+  product_name: string;
+  customer_name: string;
+  status?: ClientLicenseStatus;
+  expires_at?: string;
+  max_activations: number;
+};
+
+export type UpdateClientLicenseInput = Partial<ClientLicenseInput>;
+
+export type LicenseActivationRow = {
+  id: number;
+  license_id: number;
+  device_id: string;
+  device_name: string | null;
+  activated_at: string;
+  last_check_at: string | null;
+  status: LicenseActivationStatus;
+};
+
+export type LicenseEventRow = {
+  id: number;
+  license_id: number | null;
+  activation_id: number | null;
+  event_type: string;
+  device_id: string | null;
+  ip_address: string | null;
+  message: string | null;
+  created_at: string;
+};
+
+export type LicenseValidationResponse =
+  | {
+    ok: true;
+    valid: true;
+    license_id: number;
+    activation_id: number;
+    status: ClientLicenseStatus;
+    expires_at: string | null;
+  }
+  | {
+    ok: true;
+    valid: false;
+    reason:
+    | "not_found"
+    | "blocked"
+    | "expired"
+    | "activation_limit_exceeded"
+    | "device_not_activated"
+    | "deactivated"
+    | "invalid_payload";
+  };
+
+export function getClientLicenses(): Promise<ClientLicenseRow[]> {
+  return j<ClientLicenseRow[]>("/api/client-licenses");
+}
+
+export function createClientLicense(input: ClientLicenseInput): Promise<ClientLicenseRow> {
+  return j<ClientLicenseRow>("/api/client-licenses", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateClientLicense(
+  id: number,
+  input: UpdateClientLicenseInput
+): Promise<ClientLicenseRow> {
+  return j<ClientLicenseRow>(`/api/client-licenses/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getLicenseActivations(licenseId: number): Promise<LicenseActivationRow[]> {
+  return j<LicenseActivationRow[]>(`/api/client-licenses/${licenseId}/activations`);
+}
+
+export function getLicenseEvents(licenseId: number): Promise<LicenseEventRow[]> {
+  return j<LicenseEventRow[]>(`/api/client-licenses/${licenseId}/events`);
+}
+
+export function getAllLicenseEvents(): Promise<LicenseEventRow[]> {
+  return j<LicenseEventRow[]>("/api/license-events");
+}
+
+export function activateClientLicense(input: {
+  license_key: string;
+  device_id: string;
+  device_name?: string;
+}): Promise<LicenseValidationResponse> {
+  return j<LicenseValidationResponse>("/api/license/activate", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function checkClientLicense(input: {
+  license_key: string;
+  device_id: string;
+}): Promise<LicenseValidationResponse> {
+  return j<LicenseValidationResponse>("/api/license/check", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deactivateClientLicense(input: {
+  license_key: string;
+  device_id: string;
+}): Promise<{ ok: true; deactivated: boolean }> {
+  return j<{ ok: true; deactivated: boolean }>("/api/license/deactivate", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
 
 /* ------------------------------------------
  * Auth API (HTTP)
@@ -370,12 +548,14 @@ export function logout() {
  * ------------------------------------------ */
 
 export type LicenseType = "perpetual" | "subscription" | "trial";
+export type AssignmentType = "per_install" | "per_user" | "concurrent";
 
 export type LicenseRow = {
   id: string;
   product: string;
   vendor?: string;
   license_type: LicenseType;
+  assignment_type: AssignmentType;
   seats_total: number;
   seats_used: number;
   starts_at?: string;
@@ -383,7 +563,6 @@ export type LicenseRow = {
   note?: string;
   updated_at?: string;
 };
-
 function normalizeRow(r: LicenseRow): LicenseRow {
   return {
     ...r,
@@ -391,6 +570,8 @@ function normalizeRow(r: LicenseRow): LicenseRow {
     note: r.note ?? "",
     starts_at: r.starts_at ?? "",
     expires_at: r.expires_at ?? "",
+    license_type: (r.license_type ?? "perpetual") as LicenseType,
+    assignment_type: (r.assignment_type ?? "per_install") as AssignmentType,
     seats_total: Number.isFinite(Number(r.seats_total)) ? Number(r.seats_total) : 0,
     seats_used: Number.isFinite(Number(r.seats_used)) ? Number(r.seats_used) : 0,
   };
@@ -405,6 +586,7 @@ export async function upsertLicense(row: LicenseRow): Promise<LicenseRow> {
   if (!row?.id) throw new Error("upsertLicense: row.id required");
   if (!row?.product) throw new Error("upsertLicense: product required");
   if (!row?.license_type) throw new Error("upsertLicense: license_type required");
+  if (!row?.assignment_type) throw new Error("upsertLicense: assignment_type required");
 
   const payload = normalizeRow(row);
 
