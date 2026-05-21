@@ -1,0 +1,36 @@
+{
+  "name": "license-monitor-client-app",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "activate": "tsx src/main.ts activate",
+    "check": "tsx src/main.ts check",
+    "deactivate": "tsx src/main.ts deactivate",
+    "app": "tsx src/main.ts app",
+    "dev:ui": "vite --host 127.0.0.1 --port 5174",
+    "electron": "electron electron/main.cjs",
+    "desktop": "concurrently -k \"npm run dev:ui\" \"wait-on http://127.0.0.1:5174 && npm run electron\""
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "dotenv": "^16.4.7",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "concurrently": "latest",
+    "electron": "latest",
+    "tailwindcss": "^4.2.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "wait-on": "latest"
+  }
+}

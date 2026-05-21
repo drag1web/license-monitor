@@ -31,38 +31,35 @@ export function RowMenu({
       width={320}
     >
       {!row ? null : (
-        <div className="overflow-hidden">
-          {/* Header */}
-          <div className="px-3 pt-3 pb-2">
-            <div className="rounded-2xl bg-[rgba(var(--card),0.18)] px-3 py-3">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-[rgba(var(--fg),0.05)]">
-                  <KeyRound className="h-4 w-4 text-cyan-300/85" />
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+          <div className="border-b border-slate-200 px-3 py-3">
+            <div className="flex items-start gap-3">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
+                <KeyRound className="h-4 w-4" />
+              </div>
+
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-slate-950">
+                  {row.product}
                 </div>
 
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-[rgba(var(--fg),0.90)]">
-                    {row.product}
-                  </div>
-
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-[rgba(var(--fg),0.46)]">
-                    {row.vendor ? <span>{row.vendor}</span> : null}
-                    {row.license_type ? <span>{row.license_type}</span> : null}
-                    {isPinned ? (
-                      <span className="rounded-xl bg-cyan-500/10 px-2 py-1 text-cyan-200/85">
-                        pinned
-                      </span>
-                    ) : null}
-                  </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  {row.vendor ? <span>{row.vendor}</span> : null}
+                  {row.license_type ? <span>{row.license_type}</span> : null}
+                  {isPinned ? (
+                    <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">
+                      закреплено
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </div>
           </div>
 
-          <MenuSection title="Actions">
+          <MenuSection title="Действия">
             <MenuItem
-              icon={<Pencil className="h-4 w-4 text-[rgba(var(--fg),0.72)]" />}
-              title="Edit"
+              icon={<Pencil className="h-4 w-4 text-slate-500" />}
+              title="Редактировать"
               description="Открыть редактор лицензии"
               onClick={() => {
                 onClose();
@@ -71,8 +68,8 @@ export function RowMenu({
             />
 
             <MenuItem
-              icon={<Copy className="h-4 w-4 text-[rgba(var(--fg),0.72)]" />}
-              title="Duplicate"
+              icon={<Copy className="h-4 w-4 text-slate-500" />}
+              title="Дублировать"
               description="Создать копию записи"
               onClick={() => {
                 onClose();
@@ -83,12 +80,12 @@ export function RowMenu({
             <MenuItem
               icon={
                 isPinned ? (
-                  <PinOff className="h-4 w-4 text-cyan-200/85" />
+                  <PinOff className="h-4 w-4 text-blue-600" />
                 ) : (
-                  <Pin className="h-4 w-4 text-[rgba(var(--fg),0.72)]" />
+                  <Pin className="h-4 w-4 text-slate-500" />
                 )
               }
-              title={isPinned ? "Unpin" : "Pin"}
+              title={isPinned ? "Открепить" : "Закрепить"}
               description={
                 isPinned
                   ? "Убрать запись из закреплённых"
@@ -101,13 +98,13 @@ export function RowMenu({
             />
           </MenuSection>
 
-          <div className="mx-3 my-2 h-px bg-[rgba(100,130,170,0.14)]" />
+          <div className="mx-3 my-2 h-px bg-slate-200" />
 
-          <MenuSection title="Danger zone">
+          <MenuSection title="Опасная зона">
             <MenuItem
-              icon={<Trash2 className="h-4 w-4 text-rose-200/90" />}
-              title="Delete"
-              description="Удалить только из local registry"
+              icon={<Trash2 className="h-4 w-4 text-red-600" />}
+              title="Удалить"
+              description="Удалить только из локального реестра"
               tone="danger"
               onClick={() => {
                 onClose();

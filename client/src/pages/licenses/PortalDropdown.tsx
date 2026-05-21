@@ -1,11 +1,27 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "../../ui/cn/cn";
 
-type Rect = { left: number; top: number; width: number; height: number; right: number; bottom: number };
+type Rect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  right: number;
+  bottom: number;
+};
+
 function getRect(el: HTMLElement): Rect {
   const r = el.getBoundingClientRect();
-  return { left: r.left, top: r.top, width: r.width, height: r.height, right: r.right, bottom: r.bottom };
+  return {
+    left: r.left,
+    top: r.top,
+    width: r.width,
+    height: r.height,
+    right: r.right,
+    bottom: r.bottom,
+  };
 }
+
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
@@ -35,9 +51,11 @@ function useOutsidePointerDown(
 function useEsc(open: boolean, onClose: () => void) {
   useEffect(() => {
     if (!open) return;
+
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
+
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
@@ -56,7 +74,6 @@ export function PortalDropdown({
   width?: number;
   children: React.ReactNode;
 }) {
-
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   useOutsidePointerDown(open, onClose, panelRef);
@@ -82,17 +99,23 @@ export function PortalDropdown({
     const belowY = ar.bottom + 8;
     const aboveY = ar.top - 8 - pr.height;
     const fitsBelow = belowY + pr.height + margin <= vh;
-    const y = fitsBelow ? belowY : clamp(aboveY, margin, vh - pr.height - margin);
+    const y = fitsBelow
+      ? belowY
+      : clamp(aboveY, margin, vh - pr.height - margin);
 
     setPos({ x, y });
   }, [anchorRef]);
 
   useEffect(() => {
     if (!open) return;
-    compute();
+
+    requestAnimationFrame(compute);
+
     const onRe = () => compute();
+
     window.addEventListener("resize", onRe);
     window.addEventListener("scroll", onRe, true);
+
     return () => {
       window.removeEventListener("resize", onRe);
       window.removeEventListener("scroll", onRe, true);
@@ -104,27 +127,24 @@ export function PortalDropdown({
   return (
     <div className="fixed inset-0 z-[9999]">
       <div className="absolute inset-0" aria-hidden />
+
       <div
         ref={(el) => {
           panelRef.current = el;
         }}
-        style={{ width, transform: `translate3d(${pos.x}px, ${pos.y}px, 0)` }}
+        style={{
+          width,
+          transform: `translate3d(${pos.x}px, ${pos.y}px, 0)`,
+        }}
         className={cn(
-          "absolute rounded-2xl border border-white/10 bg-[rgb(var(--panel))]/96",
-          "backdrop-blur-sm shadow-[0_18px_50px_rgba(0,0,0,0.42)] overflow-hidden",
-          "animate-[dropdownIn_120ms_ease-out] motion-reduce:animate-none"
+          "absolute overflow-hidden rounded-xl",
+          "border border-slate-200 bg-white",
+          "shadow-[0_18px_50px_rgba(15,23,42,0.22)]"
         )}
         role="menu"
       >
         {children}
       </div>
-
-      <style>{`
-        @keyframes dropdownIn {
-          from { opacity: 0; transform: translate3d(${pos.x}px, ${pos.y + 6}px, 0) scale(0.98); }
-          to   { opacity: 1; transform: translate3d(${pos.x}px, ${pos.y}px, 0) scale(1); }
-        }
-      `}</style>
     </div>
   );
 }
@@ -134,7 +154,7 @@ export function MenuItem({
   title,
   description,
   right,
-  tone,
+  tone = "default",
   disabled,
   onClick,
 }: {
@@ -152,29 +172,56 @@ export function MenuItem({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "w-full text-left px-3 py-2",
-        "flex items-center gap-2",
-        "hover:bg-white/5 transition",
-        disabled && "opacity-50 cursor-not-allowed",
-        tone === "danger" && "hover:bg-rose-500/10"
+        "flex w-full items-center gap-3 px-3 py-2.5 text-left transition",
+        "hover:bg-slate-50",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        tone === "danger" && "hover:bg-red-50"
       )}
     >
-      <div className="shrink-0">{icon}</div>
+      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500">
+        {icon}
+      </div>
+
       <div className="min-w-0 flex-1">
-        <div className={cn("text-sm font-semibold", tone === "danger" ? "text-rose-100" : "text-white/90")}>
+        <div
+          className={cn(
+            "text-sm font-semibold",
+            tone === "danger"
+              ? "text-red-700"
+              : tone === "warn"
+                ? "text-amber-700"
+                : "text-slate-900"
+          )}
+        >
           {title}
         </div>
-        {description && <div className="text-[11px] text-white/45">{description}</div>}
+
+        {description && (
+          <div className="mt-0.5 text-xs leading-4 text-slate-500">
+            {description}
+          </div>
+        )}
       </div>
-      {right != null && <div className="text-[11px] text-white/45 tabular-nums">{right}</div>}
+
+      {right != null && (
+        <div className="text-xs tabular-nums text-slate-400">{right}</div>
+      )}
     </button>
   );
 }
 
-export function MenuSection({ title, children }: { title: string; children: React.ReactNode }) {
+export function MenuSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <div className="px-3 pt-3 pb-2 text-[11px] text-white/45">{title}</div>
+      <div className="px-3 pb-2 pt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        {title}
+      </div>
       {children}
     </div>
   );

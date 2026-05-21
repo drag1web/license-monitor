@@ -9,6 +9,7 @@ import {
   ArrowUpRight,
   Trash2,
   RefreshCw,
+  Inbox,
 } from "lucide-react";
 import {
   getAlerts,
@@ -20,16 +21,9 @@ import {
 } from "../api";
 import { Card } from "../ui/Card";
 import { cn } from "../ui/cn/cn";
+import { PageHeader } from "../components/PageHeader";
 
 type AlertsTab = "all" | "unread" | "critical";
-
-const CARD_SHADOW = "shadow-[0_24px_80px_rgba(0,0,0,0.36)]";
-const SOFT_BORDER = "border-[rgba(100,130,170,0.18)]";
-const SOFT_BORDER_HOVER = "hover:border-[rgba(120,155,205,0.28)]";
-const GLASS_BG = "bg-[rgba(var(--card),0.26)]";
-const GLASS_BG_SOFT = "bg-[rgba(var(--card),0.18)]";
-const GLASS_BG_STRONG =
-  "bg-[linear-gradient(to_bottom,rgba(var(--card),0.46),rgba(var(--card),0.22))]";
 
 function formatWhen(iso: string) {
   const d = new Date(iso);
@@ -46,73 +40,147 @@ function formatWhen(iso: string) {
 }
 
 function severityLabel(a: AlertRow) {
-  if (a.severity === "critical") return "critical";
-  if (a.severity === "warn") return "warning";
-  return "info";
+  if (a.severity === "critical") return "Критично";
+  if (a.severity === "warn") return "Предупреждение";
+  return "Информация";
 }
 
 function iconForAlert(a: AlertRow) {
   if (a.severity === "critical") {
-    return <ShieldAlert className="h-4 w-4 text-rose-300" />;
+    return <ShieldAlert className="h-5 w-5 text-red-600" />;
   }
+
   if (a.severity === "warn") {
-    return <TriangleAlert className="h-4 w-4 text-amber-300" />;
+    return <TriangleAlert className="h-5 w-5 text-amber-600" />;
   }
-  return <CircleAlert className="h-4 w-4 text-cyan-300" />;
+
+  return <CircleAlert className="h-5 w-5 text-slate-600" />;
 }
 
 function toneClasses(a: AlertRow) {
   if (a.severity === "critical") {
     return {
-      card: a.is_read
-        ? "border-rose-500/15 bg-rose-500/[0.04]"
-        : "border-rose-400/22 bg-rose-500/[0.08]",
-      badge: "bg-rose-500/12 text-rose-200 border border-rose-400/18",
+      card: "border-red-300 bg-red-50/80",
+      icon: "border-red-200 bg-red-50",
+      badge: "border-red-200 bg-red-50 text-red-700",
+      accent: "bg-red-500",
     };
   }
 
   if (a.severity === "warn") {
     return {
-      card: a.is_read
-        ? "border-amber-500/15 bg-amber-500/[0.035]"
-        : "border-amber-400/20 bg-amber-500/[0.07]",
-      badge: "bg-amber-500/12 text-amber-200 border border-amber-400/18",
+      card: "border-amber-300 bg-amber-50/80",
+      icon: "border-amber-200 bg-amber-50",
+      badge: "border-amber-200 bg-amber-50 text-amber-700",
+      accent: "bg-amber-500",
     };
   }
 
   return {
-    card: a.is_read
-      ? "border-cyan-500/15 bg-cyan-500/[0.03]"
-      : "border-cyan-400/18 bg-cyan-500/[0.06]",
-    badge: "bg-cyan-500/12 text-cyan-200 border border-cyan-400/18",
+    card: "border-slate-200 bg-white",
+    icon: "border-slate-200 bg-slate-50",
+    badge: "border-slate-200 bg-slate-50 text-slate-700",
+    accent: "bg-slate-400",
   };
 }
 
-function ActionButton(props: {
+function ActionButton({
+  onClick,
+  disabled,
+  children,
+  danger = false,
+  leftIcon,
+}: {
   onClick?: () => void;
   disabled?: boolean;
   children: React.ReactNode;
   danger?: boolean;
   leftIcon?: React.ReactNode;
 }) {
-  const { onClick, disabled, children, danger = false, leftIcon } = props;
-
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm font-semibold transition outline-none",
+        "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition",
         danger
-          ? "border-rose-400/15 bg-rose-500/8 text-rose-200 hover:bg-rose-500/14"
-          : `${SOFT_BORDER} ${GLASS_BG} text-[rgba(var(--fg),0.86)] hover:bg-[rgba(var(--card),0.38)] ${SOFT_BORDER_HOVER}`,
+          ? "border-red-200 bg-white text-red-600 hover:bg-red-50"
+          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
         "disabled:cursor-not-allowed disabled:opacity-45"
       )}
     >
       {leftIcon}
       {children}
     </button>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+  critical = false,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  critical?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-lg border px-3 py-2 text-sm font-medium transition",
+        active
+          ? critical
+            ? "border-red-600 bg-red-600 text-white"
+            : "border-slate-900 bg-slate-900 text-white"
+          : critical
+            ? "border-red-200 bg-white text-red-700 hover:bg-red-50"
+            : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: number;
+  tone?: "default" | "warn" | "critical";
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border bg-white p-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)]",
+        tone === "critical"
+          ? "border-red-200"
+          : tone === "warn"
+            ? "border-amber-200"
+            : "border-slate-200"
+      )}
+    >
+      <div className="text-sm text-slate-500">{label}</div>
+      <div
+        className={cn(
+          "mt-1 text-2xl font-semibold tabular-nums",
+          tone === "critical"
+            ? "text-red-600"
+            : tone === "warn"
+              ? "text-amber-600"
+              : "text-slate-950"
+        )}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -208,6 +276,11 @@ export default function AlertsPage() {
     [items]
   );
 
+  const warnCount = useMemo(
+    () => items.filter((x) => x.severity === "warn").length,
+    [items]
+  );
+
   const filteredItems = useMemo(() => {
     if (tab === "unread") return items.filter((x) => x.is_read === 0);
     if (tab === "critical") return items.filter((x) => x.severity === "critical");
@@ -216,140 +289,122 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-6">
-      <Card className={cn("rounded-3xl p-5 md:p-6", CARD_SHADOW)}>
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[rgba(var(--fg),0.88)]">
-              <Bell className="h-5 w-5 text-cyan-400" />
-              <span className="text-2xl font-semibold tracking-tight">Уведомления</span>
-            </div>
+      <PageHeader
+        title="Уведомления"
+        subtitle="Системные события, предупреждения и критичные проблемы по результатам проверок."
+      />
 
-            <div className="mt-2 text-sm text-[rgba(var(--fg),0.56)]">
-              История системных alerts, ошибок и предупреждений.
-            </div>
+      <Card className="p-5">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:min-w-[520px]">
+            <StatCard label="Всего" value={items.length} />
+            <StatCard label="Непрочитанных" value={unreadCount} tone="warn" />
+            <StatCard label="Критичных" value={criticalCount} tone="critical" />
+          </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setTab("all")}
-                className={cn(
-                  "rounded-2xl border px-3 py-1.5 text-[12px] font-semibold transition",
-                  tab === "all"
-                    ? "border-cyan-400/18 bg-cyan-500/14 text-cyan-200"
-                    : "border-white/[0.08] bg-white/[0.04] text-white/70 hover:bg-white/[0.08]"
-                )}
-              >
-                All
-              </button>
+          <div className="flex flex-col gap-3 xl:items-end">
+            <div className="flex flex-wrap gap-2">
+              <TabButton active={tab === "all"} onClick={() => setTab("all")}>
+                Все
+              </TabButton>
 
-              <button
-                type="button"
+              <TabButton
+                active={tab === "unread"}
                 onClick={() => setTab("unread")}
-                className={cn(
-                  "rounded-2xl border px-3 py-1.5 text-[12px] font-semibold transition",
-                  tab === "unread"
-                    ? "border-cyan-400/18 bg-cyan-500/14 text-cyan-200"
-                    : "border-white/[0.08] bg-white/[0.04] text-white/70 hover:bg-white/[0.08]"
-                )}
               >
-                Unread
-                {unreadCount > 0 && (
-                  <span className="ml-1.5 text-[10px] text-cyan-300/85">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
+                Непрочитанные {unreadCount}
+              </TabButton>
 
-              <button
-                type="button"
+              <TabButton
+                active={tab === "critical"}
                 onClick={() => setTab("critical")}
-                className={cn(
-                  "rounded-2xl border px-3 py-1.5 text-[12px] font-semibold transition",
-                  tab === "critical"
-                    ? "border-rose-400/18 bg-rose-500/14 text-rose-200"
-                    : "border-white/[0.08] bg-white/[0.04] text-white/70 hover:bg-white/[0.08]"
-                )}
+                critical
               >
-                Critical
-                {criticalCount > 0 && (
-                  <span className="ml-1.5 text-[10px] text-rose-300/85">
-                    {criticalCount}
-                  </span>
-                )}
-              </button>
+                Критичные {criticalCount}
+              </TabButton>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <ActionButton
+                onClick={() => refresh(true)}
+                leftIcon={<RefreshCw className="h-4 w-4" />}
+              >
+                Обновить
+              </ActionButton>
+
+              <ActionButton
+                onClick={onReadAll}
+                disabled={items.length === 0 || unreadCount === 0}
+                leftIcon={<CheckCheck className="h-4 w-4" />}
+              >
+                Прочитать все
+              </ActionButton>
+
+              <ActionButton
+                onClick={onDeleteRead}
+                disabled={items.length === 0 || items.every((x) => x.is_read === 0)}
+                danger
+                leftIcon={<Trash2 className="h-4 w-4" />}
+              >
+                Удалить прочитанные
+              </ActionButton>
             </div>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <ActionButton onClick={() => refresh(true)} leftIcon={<RefreshCw className="h-4 w-4" />}>
-              Обновить
-            </ActionButton>
-
-            <ActionButton
-              onClick={onReadAll}
-              disabled={items.length === 0 || unreadCount === 0}
-              leftIcon={<CheckCheck className="h-4 w-4" />}
-            >
-              Прочитать все
-            </ActionButton>
-
-            <ActionButton
-              onClick={onDeleteRead}
-              disabled={items.length === 0 || items.every((x) => x.is_read === 0)}
-              danger
-              leftIcon={<Trash2 className="h-4 w-4" />}
-            >
-              Удалить прочитанные
-            </ActionButton>
-          </div>
         </div>
       </Card>
 
-      <Card className={cn("rounded-3xl p-5", CARD_SHADOW)}>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div className={cn("rounded-2xl border p-4", SOFT_BORDER, GLASS_BG_STRONG)}>
-            <div className="text-[11px] text-[rgba(var(--fg),0.46)]">Всего</div>
-            <div className="mt-1 text-2xl font-semibold tabular-nums">{items.length}</div>
-          </div>
-
-          <div className={cn("rounded-2xl border p-4", SOFT_BORDER, GLASS_BG_STRONG)}>
-            <div className="text-[11px] text-[rgba(var(--fg),0.46)]">Непрочитанных</div>
-            <div className="mt-1 text-2xl font-semibold tabular-nums">{unreadCount}</div>
-          </div>
-
-          <div className={cn("rounded-2xl border p-4", SOFT_BORDER, GLASS_BG_STRONG)}>
-            <div className="text-[11px] text-[rgba(var(--fg),0.46)]">Критичных</div>
-            <div className="mt-1 text-2xl font-semibold tabular-nums">{criticalCount}</div>
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+              <Bell className="h-4 w-4 text-slate-500" />
+              Список уведомлений
+            </div>
+            <div className="mt-1 text-xs text-slate-500">
+              Предупреждений: {warnCount} · Критичных: {criticalCount}
+            </div>
           </div>
         </div>
-      </Card>
 
-      <Card className={cn("rounded-3xl p-5", CARD_SHADOW)}>
         {loading ? (
-          <div className="py-10 text-sm text-[rgba(var(--fg),0.46)]">Загрузка...</div>
+          <div className="p-5">
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-28 animate-pulse rounded-xl border border-slate-200 bg-slate-50"
+                />
+              ))}
+            </div>
+          </div>
         ) : err ? (
-          <div className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          <div className="m-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {err}
           </div>
         ) : filteredItems.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-10 text-center">
-            <div className="text-sm font-semibold text-white/80">
+          <div className="flex flex-col items-center px-6 py-14 text-center">
+            <div className="grid h-12 w-12 place-items-center rounded-xl border border-slate-200 bg-slate-50">
+              <Inbox className="h-6 w-6 text-slate-400" />
+            </div>
+
+            <div className="mt-4 text-sm font-semibold text-slate-900">
               {tab === "all"
                 ? "Пока нет уведомлений"
                 : tab === "unread"
-                ? "Нет непрочитанных уведомлений"
-                : "Нет критичных уведомлений"}
+                  ? "Нет непрочитанных уведомлений"
+                  : "Нет критичных уведомлений"}
             </div>
-            <div className="mt-1 text-xs text-white/45">
+
+            <div className="mt-1 max-w-md text-sm text-slate-500">
               {tab === "all"
-                ? "Когда появятся дефициты, истечения или ошибки — они будут здесь."
+                ? "Когда появятся дефициты, истечения лицензий или ошибки обработки, они будут отображаться здесь."
                 : tab === "unread"
-                ? "Все уведомления уже прочитаны."
-                : "Сейчас нет критичных проблем."}
+                  ? "Все текущие уведомления уже отмечены как прочитанные."
+                  : "Сейчас нет критичных событий, требующих немедленного внимания."}
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-slate-200">
             {filteredItems.map((a) => {
               const tone = toneClasses(a);
 
@@ -357,78 +412,92 @@ export default function AlertsPage() {
                 <div
                   key={a.id}
                   className={cn(
-                    "rounded-2xl border p-4 transition hover:-translate-y-[1px] hover:border-white/[0.16]",
-                    tone.card
+                    "relative p-5 transition hover:bg-slate-50",
+                    a.is_read === 0 && "bg-slate-50/70"
                   )}
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/[0.06] bg-white/[0.045]">
-                      {iconForAlert(a)}
-                    </div>
+                  {a.is_read === 0 && (
+                    <div className={cn("absolute left-0 top-0 h-full w-1", tone.accent)} />
+                  )}
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div
+                    className={cn(
+                      "rounded-xl border p-4 shadow-[0_2px_8px_rgba(15,23,42,0.05)]",
+                      tone.card
+                    )}
+                  >
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="flex min-w-0 gap-4">
+                        <div
+                          className={cn(
+                            "grid h-11 w-11 shrink-0 place-items-center rounded-xl border",
+                            tone.icon
+                          )}
+                        >
+                          {iconForAlert(a)}
+                        </div>
+
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <div className="text-sm font-semibold text-white/90">
+                            <div className="text-sm font-semibold text-slate-950">
                               {a.title}
                             </div>
 
                             <span
                               className={cn(
-                                "rounded-xl px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                                "rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide",
                                 tone.badge
                               )}
                             >
                               {severityLabel(a)}
                             </span>
 
-                            {a.is_read === 0 && (
-                              <span className="rounded-xl bg-cyan-500/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-cyan-200">
-                                unread
+                            {a.is_read === 0 ? (
+                              <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                                Новое
+                              </span>
+                            ) : (
+                              <span className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                                Прочитано
                               </span>
                             )}
                           </div>
 
-                          <div className="mt-1 text-sm text-white/60">{a.message}</div>
+                          <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-700">
+                            {a.message}
+                          </div>
 
-                          <div className="mt-3 text-[12px] text-white/38">
+                          <div className="mt-3 text-xs text-slate-500">
                             {formatWhen(a.created_at)}
-                            {a.run_id ? ` · run #${a.run_id}` : ""}
+                            {a.run_id ? ` · запуск #${a.run_id}` : ""}
                           </div>
                         </div>
+                      </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-                          {a.run_id ? (
-                            <Link
-                              to={`/runs/${a.run_id}`}
-                              className={cn(
-                                "inline-flex items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-[12px] font-semibold",
-                                "border-white/[0.08] bg-white/[0.04] text-cyan-200",
-                                "transition hover:bg-white/[0.08] hover:border-white/[0.14]"
-                              )}
-                            >
-                              Открыть
-                              <ArrowUpRight className="h-3.5 w-3.5" />
-                            </Link>
-                          ) : null}
-
-                          {a.is_read === 0 ? (
-                            <ActionButton onClick={() => onRead(a.id)}>
-                              Прочитать
-                            </ActionButton>
-                          ) : (
-                            <span className="px-2 text-[12px] text-white/35">Прочитано</span>
-                          )}
-
-                          <ActionButton
-                            onClick={() => onDelete(a.id)}
-                            danger
-                            leftIcon={<Trash2 className="h-4 w-4" />}
+                      <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
+                        {a.run_id ? (
+                          <Link
+                            to={`/runs/${a.run_id}`}
+                            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                           >
-                            Удалить
+                            Открыть
+                            <ArrowUpRight className="h-4 w-4" />
+                          </Link>
+                        ) : null}
+
+                        {a.is_read === 0 && (
+                          <ActionButton onClick={() => onRead(a.id)}>
+                            Прочитать
                           </ActionButton>
-                        </div>
+                        )}
+
+                        <ActionButton
+                          onClick={() => onDelete(a.id)}
+                          danger
+                          leftIcon={<Trash2 className="h-4 w-4" />}
+                        >
+                          Удалить
+                        </ActionButton>
                       </div>
                     </div>
                   </div>

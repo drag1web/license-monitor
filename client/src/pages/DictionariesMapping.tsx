@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import type { ReactNode } from "react";
 import {
   GitBranch,
   Search,
@@ -7,9 +9,10 @@ import {
   ShieldCheck,
   RefreshCw,
   AlertTriangle,
-  Unplug,
   Boxes,
   ChevronDown,
+  X,
+  Play,
 } from "lucide-react";
 
 import { Card } from "../ui/Card";
@@ -27,6 +30,7 @@ import {
   updateMappingRule,
   deleteMappingRule,
   testMappingRule,
+  runCheck,
   type MappingRuleRow,
   type ProductRow,
 } from "../api";
@@ -45,7 +49,6 @@ import {
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
-
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
 
@@ -70,30 +73,20 @@ function getProductLabel(rule: MappingRuleRow, products?: ProductRow[]) {
 
 function getMatchTypeLabel(value?: string | null) {
   const v = (value ?? "").trim().toLowerCase();
-
-  if (v === "exact") return "Exact";
-  if (v === "contains") return "Contains";
+  if (v === "exact") return "Точно";
+  if (v === "contains") return "Содержит";
   if (v === "regex") return "Regex";
-
   return v || "—";
 }
 
 function getMatchTypeTone(value?: string | null) {
   const v = (value ?? "").trim().toLowerCase();
 
-  if (v === "exact") {
-    return "border-emerald-300/15 bg-emerald-300/10 text-emerald-100/90";
-  }
+  if (v === "exact") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (v === "contains") return "border-blue-200 bg-blue-50 text-blue-700";
+  if (v === "regex") return "border-violet-200 bg-violet-50 text-violet-700";
 
-  if (v === "contains") {
-    return "border-cyan-300/15 bg-cyan-300/10 text-cyan-100/90";
-  }
-
-  if (v === "regex") {
-    return "border-violet-300/15 bg-violet-300/10 text-violet-100/90";
-  }
-
-  return "border-white/[0.08] bg-white/[0.03] text-white/60";
+  return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
 function getSelectedProductById(products: ProductRow[], rawId: string) {
@@ -116,17 +109,17 @@ function getFilterProductLabel(products: ProductRow[], rawId: string) {
 
 function getFilterMatchTypeLabel(value: string) {
   if (!value) return "Все типы";
-  if (value === "exact") return "Exact";
-  if (value === "contains") return "Contains";
+  if (value === "exact") return "Точно";
+  if (value === "contains") return "Содержит";
   if (value === "regex") return "Regex";
   return value;
 }
 
 function getMatchTypeSelectLabel(value: string) {
-  if (value === "exact") return "Exact";
-  if (value === "contains") return "Contains";
+  if (value === "exact") return "Точно";
+  if (value === "contains") return "Содержит";
   if (value === "regex") return "Regex";
-  return "Contains";
+  return "Содержит";
 }
 
 function getSortLabel(value: string) {
@@ -157,25 +150,74 @@ function MiniStat({
   label: string;
   value: number;
   tone?: "ok" | "warn" | "bad" | "none";
-  icon?: React.ReactNode;
+  icon?: ReactNode;
 }) {
-  const cls =
-    tone === "ok"
-      ? "border-emerald-300/20 bg-emerald-500/10 text-emerald-100"
-      : tone === "warn"
-      ? "border-amber-300/20 bg-amber-500/10 text-amber-100"
-      : tone === "bad"
-      ? "border-rose-300/20 bg-rose-500/10 text-rose-100"
-      : "border-white/10 bg-white/[0.03] text-white/80";
-
   return (
-    <div className={cn("rounded-2xl border px-4 py-3", cls)}>
-      <div className="flex items-center gap-2 text-[11px] opacity-80">
+    <div
+      className={cn(
+        "rounded-xl border bg-white p-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)]",
+        tone === "ok" && "border-emerald-200",
+        tone === "warn" && "border-amber-200",
+        tone === "bad" && "border-red-200",
+        tone === "none" && "border-slate-200"
+      )}
+    >
+      <div className="flex items-center gap-2 text-sm text-slate-500">
         {icon}
         <span>{label}</span>
       </div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+
+      <div
+        className={cn(
+          "mt-1 text-2xl font-semibold tabular-nums",
+          tone === "ok" && "text-emerald-700",
+          tone === "warn" && "text-amber-700",
+          tone === "bad" && "text-red-700",
+          tone === "none" && "text-slate-950"
+        )}
+      >
+        {value}
+      </div>
     </div>
+  );
+}
+
+function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={cn(
+        "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none",
+        "placeholder:text-slate-400 focus:border-slate-600 focus:ring-2 focus:ring-slate-100",
+        props.className
+      )}
+    />
+  );
+}
+
+function FieldLabel({ children }: { children: ReactNode }) {
+  return <div className="mb-1 text-xs font-medium text-slate-500">{children}</div>;
+}
+
+function SelectDropdownButton({
+  refProp,
+  onClick,
+  children,
+}: {
+  refProp: React.RefObject<HTMLButtonElement | null>;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      ref={refProp}
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 transition hover:bg-slate-50"
+    >
+      <span className="truncate text-left">{children}</span>
+      <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
+    </button>
   );
 }
 
@@ -183,6 +225,10 @@ export default function DictionariesMapping() {
   const { user } = useAuth();
   const { push } = useToast();
   const canManage = user?.role === "admin";
+  const navigate = useNavigate();
+
+  const [mappingChanged, setMappingChanged] = useState(false);
+  const [runBusy, setRunBusy] = useState(false);
 
   const [items, setItems] = useState<MappingRuleRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -247,6 +293,50 @@ export default function DictionariesMapping() {
   const [testResult, setTestResult] = useState<any>(null);
   const [testBusy, setTestBusy] = useState(false);
 
+
+  async function runCheckAndOpen() {
+    if (!canManage) return;
+
+    setRunBusy(true);
+    setError("");
+
+    try {
+      const out = await runCheck();
+
+      if (!out.ok) {
+        throw new Error(out.error || "Не удалось запустить проверку");
+      }
+
+      setMappingChanged(false);
+      window.dispatchEvent(new CustomEvent("alerts:refresh"));
+
+      if (out.runId) {
+        push({
+          tone: "success",
+          title: "Проверка завершена",
+          message: `Открываю новый запуск #${out.runId}.`,
+        });
+
+        navigate(`/runs/${out.runId}`);
+        return;
+      }
+
+      navigate("/runs");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+
+      setError(msg);
+
+      push({
+        tone: "error",
+        title: "Ошибка проверки",
+        message: msg,
+      });
+    } finally {
+      setRunBusy(false);
+    }
+  }
+
   async function load() {
     setLoading(true);
     setError("");
@@ -275,11 +365,10 @@ export default function DictionariesMapping() {
   async function handleDelete(rule: MappingRuleRow) {
     const ok = await confirmDelete.ask({
       title: "Удалить правило сопоставления?",
-      description: `Правило "${rule.pattern}"${
-        getProductLabel(rule, products)
-          ? ` для продукта "${getProductLabel(rule, products)}"`
-          : ""
-      } будет удалено без возможности быстрого восстановления.`,
+      description: `Правило "${rule.pattern}"${getProductLabel(rule, products)
+        ? ` для продукта "${getProductLabel(rule, products)}"`
+        : ""
+        } будет удалено без возможности быстрого восстановления.`,
       confirmLabel: "Удалить",
       cancelLabel: "Отмена",
       danger: true,
@@ -292,11 +381,16 @@ export default function DictionariesMapping() {
     try {
       await deleteMappingRule(rule.id);
       await load();
+      setMappingChanged(true);
 
       push({
         tone: "success",
         title: "Правило удалено",
-        message: `Правило "${rule.pattern}" успешно удалено.`,
+        message: `Правило "${rule.pattern}" удалено. Для обновления результатов запустите проверку.`,
+        action: {
+          label: "Запустить",
+          onClick: () => void runCheckAndOpen(),
+        },
       });
     } catch (e) {
       setError(
@@ -344,9 +438,7 @@ export default function DictionariesMapping() {
     setCreateProductDropdownOpen(false);
 
     const selected = getSelectedProductById(products, productId);
-    if (selected) {
-      setNewCanonicalProduct(selected.name);
-    }
+    if (selected) setNewCanonicalProduct(selected.name);
   }
 
   function handleEditProductSelect(productId: string) {
@@ -354,9 +446,7 @@ export default function DictionariesMapping() {
     setEditProductDropdownOpen(false);
 
     const selected = getSelectedProductById(products, productId);
-    if (selected) {
-      setEditCanonicalProduct(selected.name);
-    }
+    if (selected) setEditCanonicalProduct(selected.name);
   }
 
   function openEditModal(rule: MappingRuleRow) {
@@ -385,12 +475,12 @@ export default function DictionariesMapping() {
     const productId = newProductId.trim();
 
     if (!pattern) {
-      setCreateError("Укажи pattern.");
+      setCreateError("Укажите pattern.");
       return;
     }
 
     if (!canonicalProduct) {
-      setCreateError("Укажи каноническое название продукта.");
+      setCreateError("Укажите каноническое название продукта.");
       return;
     }
 
@@ -414,11 +504,16 @@ export default function DictionariesMapping() {
       setTestResult(null);
       setTestInput("");
       await load();
+      setMappingChanged(true);
 
       push({
         tone: "success",
         title: "Правило создано",
-        message: `Добавлено новое правило "${pattern}".`,
+        message: `Добавлено новое правило "${pattern}". Для применения в результатах запустите проверку.`,
+        action: {
+          label: "Запустить",
+          onClick: () => void runCheckAndOpen(),
+        },
       });
     } catch (e) {
       setCreateError(
@@ -437,12 +532,12 @@ export default function DictionariesMapping() {
     const productId = editProductId.trim();
 
     if (!pattern) {
-      setEditError("Укажи pattern.");
+      setEditError("Укажите pattern.");
       return;
     }
 
     if (!canonicalProduct) {
-      setEditError("Укажи каноническое название продукта.");
+      setEditError("Укажите каноническое название продукта.");
       return;
     }
 
@@ -465,11 +560,16 @@ export default function DictionariesMapping() {
       setEditOpen(false);
       setEditingRule(null);
       await load();
+      setMappingChanged(true);
 
       push({
         tone: "success",
         title: "Изменения сохранены",
-        message: `Правило "${pattern}" успешно обновлено.`,
+        message: `Правило "${pattern}" обновлено. Для применения изменений запустите проверку.`,
+        action: {
+          label: "Запустить",
+          onClick: () => void runCheckAndOpen(),
+        },
       });
     } catch (e) {
       setEditError(
@@ -556,13 +656,13 @@ export default function DictionariesMapping() {
 
   const linkedProductsCount = useMemo(() => {
     return new Set(items.map((x) => getProductLabel(x, products)).filter(Boolean)).size;
-  }, [items]);
+  }, [items, products]);
 
   const hasActiveFilters = Boolean(
     query.trim() ||
-      selectedProductFilter ||
-      selectedMatchTypeFilter ||
-      sortBy !== "updated_desc"
+    selectedProductFilter ||
+    selectedMatchTypeFilter ||
+    sortBy !== "updated_desc"
   );
 
   function resetFilters() {
@@ -577,11 +677,80 @@ export default function DictionariesMapping() {
 
   return (
     <div className="space-y-6">
+      <Card className="p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex min-w-0 gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600">
+              <GitBranch className="h-6 w-6" />
+            </div>
+
+            <div className="min-w-0">
+              <div className="text-xl font-semibold text-slate-950">
+                Правила сопоставления
+              </div>
+
+              <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                Нормализация сырых названий ПО в канонические продукты для расчёта дефицита лицензий.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 xl:justify-end">
+            <Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+              Обновить
+            </Button>
+
+            {canManage && (
+              <Button size="sm" onClick={openCreateModal}>
+                <Plus className="h-4 w-4" />
+                Добавить правило
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {canManage && mappingChanged && (
+        <Card className="border-amber-200 bg-amber-50 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-amber-900">
+                Правила сопоставления изменены
+              </div>
+
+              <div className="mt-1 text-xs text-amber-700">
+                Чтобы новые правила повлияли на unmatched-строки, дефициты и результаты запусков,
+                нужно выполнить повторную проверку.
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={() => void runCheckAndOpen()}
+                disabled={runBusy}
+              >
+                <Play className="h-4 w-4" />
+                {runBusy ? "Запуск..." : "Запустить проверку"}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMappingChanged(false)}
+              >
+                Скрыть
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         <MiniStat
           label="Правила"
           value={loading ? 0 : items.length}
-          tone="none"
           icon={<GitBranch className="h-4 w-4" />}
         />
         <MiniStat
@@ -598,144 +767,92 @@ export default function DictionariesMapping() {
         />
       </div>
 
-      <Card
-        className={cn(
-          "rounded-3xl p-4",
-          "border border-white/[0.08]",
-          "bg-white/[0.02]"
-        )}
-      >
+      <Card className="p-4">
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 text-white/70">
+          <div className="flex items-center gap-2 text-slate-700">
             <Filter className="h-4 w-4" />
             <div className="text-sm font-semibold">Фильтры, поиск и действия</div>
           </div>
 
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-            <div
-              className={cn(
-                "flex items-center gap-2 rounded-2xl px-3.5 py-2",
-                "bg-white/[0.03] border border-white/[0.08]",
-                "focus-within:border-cyan-200/30 focus-within:shadow-[0_0_0_4px_rgba(34,211,238,0.10)]"
-              )}
-            >
-              <Search className="h-4 w-4 shrink-0 text-white/45" />
+            <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 focus-within:border-slate-600 focus-within:ring-2 focus-within:ring-slate-100">
+              <Search className="h-4 w-4 shrink-0 text-slate-400" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Поиск по pattern, продукту или типу сопоставления…"
-                className="w-full min-w-0 bg-transparent outline-none text-sm text-white/85 placeholder:text-white/35"
+                placeholder="Поиск по pattern, продукту или типу сопоставления..."
+                className="w-full min-w-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
               />
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => void load()}
-                className="inline-flex items-center gap-2"
+              <button
+                ref={productFilterAnchorRef}
+                type="button"
+                onClick={() => setProductFilterOpen((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
               >
-                <RefreshCw className="h-4 w-4" />
-                <span>Обновить</span>
-              </Button>
+                <span className="max-w-[240px] truncate">
+                  {getFilterProductLabel(products, selectedProductFilter)}
+                </span>
+                <ChevronDown className="h-4 w-4 text-slate-400" />
+              </button>
 
-              {canManage && (
-                <Button
-                  className="inline-flex items-center gap-2"
-                  onClick={openCreateModal}
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Добавить правило</span>
+              <button
+                ref={matchTypeFilterAnchorRef}
+                type="button"
+                onClick={() => setMatchTypeFilterOpen((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                <span>{getFilterMatchTypeLabel(selectedMatchTypeFilter)}</span>
+                <ChevronDown className="h-4 w-4 text-slate-400" />
+              </button>
+
+              <button
+                ref={sortAnchorRef}
+                type="button"
+                onClick={() => setSortOpen((v) => !v)}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                <span>{getSortLabel(sortBy)}</span>
+                <ChevronDown className="h-4 w-4 text-slate-400" />
+              </button>
+
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={resetFilters}>
+                  Сбросить
                 </Button>
               )}
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              ref={productFilterAnchorRef}
-              type="button"
-              onClick={() => setProductFilterOpen((v) => !v)}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm transition",
-                "border-white/[0.08] bg-white/[0.03] text-white/78",
-                "hover:bg-white/[0.05] hover:text-white"
-              )}
-            >
-              <span className="truncate max-w-[240px]">
-                {getFilterProductLabel(products, selectedProductFilter)}
-              </span>
-              <ChevronDown className="h-4 w-4 text-white/45" />
-            </button>
-
-            <button
-              ref={matchTypeFilterAnchorRef}
-              type="button"
-              onClick={() => setMatchTypeFilterOpen((v) => !v)}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm transition",
-                "border-white/[0.08] bg-white/[0.03] text-white/78",
-                "hover:bg-white/[0.05] hover:text-white"
-              )}
-            >
-              <span>{getFilterMatchTypeLabel(selectedMatchTypeFilter)}</span>
-              <ChevronDown className="h-4 w-4 text-white/45" />
-            </button>
-
-            <button
-              ref={sortAnchorRef}
-              type="button"
-              onClick={() => setSortOpen((v) => !v)}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm transition",
-                "border-white/[0.08] bg-white/[0.03] text-white/78",
-                "hover:bg-white/[0.05] hover:text-white"
-              )}
-            >
-              <span>{getSortLabel(sortBy)}</span>
-              <ChevronDown className="h-4 w-4 text-white/45" />
-            </button>
-
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={resetFilters}>
-                Сбросить
-              </Button>
-            )}
-          </div>
-
-          <div className="text-[12px] text-white/45">
+          <div className="text-xs text-slate-500">
             Показано:{" "}
-            <span className="font-semibold text-white/70">{filtered.length}</span>{" "}
-            из <span className="font-semibold text-white/70">{items.length}</span>
+            <span className="font-semibold text-slate-900">{filtered.length}</span>{" "}
+            из <span className="font-semibold text-slate-900">{items.length}</span>
           </div>
         </div>
       </Card>
 
-      <Card
-        className={cn(
-          "rounded-3xl border border-white/[0.08]",
-          "bg-gradient-to-b from-slate-950/72 via-slate-950/48 to-slate-950/28",
-          "backdrop-blur-xl shadow-[0_24px_90px_rgba(0,0,0,0.34)]",
-          "p-5 md:p-6"
-        )}
-      >
+      <Card className="p-5">
         <div className="flex flex-col gap-4">
           <div>
-            <div className="text-sm font-semibold text-white/88">
+            <div className="text-sm font-semibold text-slate-950">
               Тест сопоставления
             </div>
-            <div className="mt-1 text-sm text-white/45">
-              Проверь, какое правило сработает для произвольной строки ПО.
+            <div className="mt-1 text-sm text-slate-600">
+              Проверьте, какое правило сработает для произвольной строки ПО.
             </div>
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row">
-            <div className="flex flex-1 items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
-              <Search className="h-4 w-4 text-white/45" />
+            <div className="flex flex-1 items-center gap-3 rounded-lg border border-slate-300 bg-white px-3 py-2">
+              <Search className="h-4 w-4 text-slate-400" />
               <input
                 value={testInput}
                 onChange={(e) => setTestInput(e.target.value)}
                 placeholder="Например: JetBrains IntelliJ IDEA Ultimate"
-                className="w-full bg-transparent text-sm text-white/85 outline-none placeholder:text-white/35"
+                className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
               />
             </div>
 
@@ -751,25 +868,22 @@ export default function DictionariesMapping() {
           {testResult && (
             <div
               className={cn(
-                "rounded-[24px] border p-4 md:p-5",
+                "rounded-xl border p-4",
                 !testResult.ok
-                  ? "border-rose-400/20 bg-rose-500/10"
+                  ? "border-red-200 bg-red-50"
                   : !testResult.matched
-                  ? "border-amber-300/20 bg-amber-500/10"
-                  : "border-emerald-300/20 bg-emerald-500/10"
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-emerald-200 bg-emerald-50"
               )}
             >
               {!testResult.ok ? (
                 <div className="flex items-start gap-3">
-                  <div className="rounded-2xl border border-rose-300/20 bg-rose-400/10 p-2 text-rose-200">
-                    <AlertTriangle className="h-4 w-4" />
-                  </div>
-
+                  <AlertTriangle className="mt-0.5 h-5 w-5 text-red-600" />
                   <div>
-                    <div className="text-sm font-semibold text-rose-100">
+                    <div className="text-sm font-semibold text-red-700">
                       Ошибка проверки
                     </div>
-                    <div className="mt-1 text-sm text-rose-100/80">
+                    <div className="mt-1 text-sm text-red-600">
                       {testResult.error}
                     </div>
                   </div>
@@ -777,63 +891,55 @@ export default function DictionariesMapping() {
               ) : !testResult.matched ? (
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-start gap-3">
-                    <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-2 text-amber-200">
-                      <AlertTriangle className="h-4 w-4" />
-                    </div>
-
+                    <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-600" />
                     <div>
-                      <div className="text-sm font-semibold text-amber-100">
+                      <div className="text-sm font-semibold text-amber-700">
                         Совпадений не найдено
                       </div>
-                      <div className="mt-1 text-sm text-amber-100/80">
+                      <div className="mt-1 text-sm text-amber-700">
                         Для этой строки пока нет подходящего правила сопоставления.
                       </div>
                     </div>
                   </div>
 
                   {testInput.trim() && canManage && (
-                    <div>
-                      <Button size="sm" onClick={openCreateModalFromTest}>
-                        Создать правило из этой строки
-                      </Button>
-                    </div>
+                    <Button size="sm" onClick={openCreateModalFromTest}>
+                      Создать правило
+                    </Button>
                   )}
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="flex items-start gap-3">
-                    <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-2 text-emerald-200">
-                      <Boxes className="h-4 w-4" />
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-emerald-100">
+                    <Boxes className="mt-0.5 h-5 w-5 text-emerald-600" />
+                    <div>
+                      <div className="text-sm font-semibold text-emerald-700">
                         Совпадение найдено
                       </div>
-                      <div className="mt-1 text-sm text-emerald-100/80">
+                      <div className="mt-1 text-sm text-emerald-700">
                         Строка сопоставлена с существующим правилом.
                       </div>
                     </div>
                   </div>
 
                   <div className="grid gap-3 md:grid-cols-3">
-                    <div className="rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-3">
-                      <div className="text-[11px] uppercase tracking-wide text-white/40">
+                    <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3">
+                      <div className="text-xs uppercase tracking-wide text-slate-400">
                         Pattern
                       </div>
-                      <div className="mt-1 text-sm font-medium text-white/90 break-words">
+                      <div className="mt-1 break-words text-sm font-medium text-slate-900">
                         {testResult.rule.pattern}
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-3">
-                      <div className="text-[11px] uppercase tracking-wide text-white/40">
-                        Match type
+                    <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3">
+                      <div className="text-xs uppercase tracking-wide text-slate-400">
+                        Тип
                       </div>
                       <div className="mt-1">
                         <span
                           className={cn(
-                            "inline-flex items-center rounded-2xl border px-2.5 py-1 text-xs font-semibold",
+                            "inline-flex rounded-md border px-2 py-1 text-xs font-medium",
                             getMatchTypeTone(testResult.rule.match_type)
                           )}
                         >
@@ -842,11 +948,11 @@ export default function DictionariesMapping() {
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-3">
-                      <div className="text-[11px] uppercase tracking-wide text-white/40">
+                    <div className="rounded-xl border border-emerald-200 bg-white px-4 py-3">
+                      <div className="text-xs uppercase tracking-wide text-slate-400">
                         Продукт
                       </div>
-                      <div className="mt-1 text-sm font-medium text-white/90 break-words">
+                      <div className="mt-1 break-words text-sm font-medium text-slate-900">
                         {testResult.product?.name ?? testResult.rule.canonical_product}
                       </div>
                     </div>
@@ -859,20 +965,20 @@ export default function DictionariesMapping() {
       </Card>
 
       {error && (
-        <div className="flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100/90">
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>{error}</div>
         </div>
       )}
 
-      <Card className="p-0 rounded-3xl overflow-hidden border border-white/[0.08] bg-white/[0.02]">
+      <Card className="overflow-hidden">
         <Table>
           <TableCaption
             title="Правила сопоставления"
             description="Правила нормализации сырых названий ПО в канонические продукты."
             right={
-              <div className="text-[11px] text-white/45">
-                {loading ? "Загружаю…" : `Показано: ${filtered.length} / ${items.length}`}
+              <div className="text-xs text-slate-500">
+                {loading ? "Загрузка..." : `Показано: ${filtered.length} / ${items.length}`}
               </div>
             }
           />
@@ -889,7 +995,7 @@ export default function DictionariesMapping() {
               description={
                 items.length === 0
                   ? "После добавления правил они появятся в этой таблице."
-                  : "Попробуй изменить строку поиска или очистить фильтры."
+                  : "Попробуйте изменить строку поиска или очистить фильтры."
               }
             />
           ) : (
@@ -897,22 +1003,22 @@ export default function DictionariesMapping() {
               <TableInner stickyHeader density="comfortable">
                 <THead>
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">
                       Pattern
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">
                       Продукт
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-white/55">
-                      Match type
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">
+                      Тип
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">
                       Создан
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">
                       Обновлён
                     </th>
-                    <th className="px-4 py-3 text-right font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-right font-semibold text-slate-600">
                       Действия
                     </th>
                   </tr>
@@ -927,31 +1033,31 @@ export default function DictionariesMapping() {
                         key={item.id}
                         className={cn(
                           testResult?.ok &&
-                            testResult?.matched &&
-                            testResult?.rule?.id === item.id &&
-                            "bg-emerald-500/[0.08] ring-1 ring-emerald-300/15"
+                          testResult?.matched &&
+                          testResult?.rule?.id === item.id &&
+                          "bg-emerald-50"
                         )}
                       >
-                        <Td className="text-white/88">
-                          <div className="flex items-center gap-2">
+                        <Td className="text-slate-900">
+                          <div className="flex flex-wrap items-center gap-2">
                             <div className="font-medium">{item.pattern}</div>
 
                             {testResult?.ok &&
                               testResult?.matched &&
                               testResult?.rule?.id === item.id && (
-                                <span className="inline-flex items-center rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-100">
+                                <span className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                                   Сработало в тесте
                                 </span>
                               )}
                           </div>
                         </Td>
 
-                        <Td className="text-white/65">{productLabel || "—"}</Td>
+                        <Td className="text-slate-700">{productLabel || "—"}</Td>
 
                         <Td>
                           <span
                             className={cn(
-                              "inline-flex items-center rounded-2xl border px-2.5 py-1 text-xs font-semibold",
+                              "inline-flex rounded-md border px-2 py-1 text-xs font-medium",
                               getMatchTypeTone(item.match_type)
                             )}
                           >
@@ -959,11 +1065,11 @@ export default function DictionariesMapping() {
                           </span>
                         </Td>
 
-                        <Td className="text-white/55">
+                        <Td className="text-slate-500">
                           {formatDate(item.created_at)}
                         </Td>
 
-                        <Td className="text-white/55">
+                        <Td className="text-slate-500">
                           {formatDate(item.updated_at)}
                         </Td>
 
@@ -978,6 +1084,7 @@ export default function DictionariesMapping() {
                                 >
                                   Редактировать
                                 </Button>
+
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -988,7 +1095,7 @@ export default function DictionariesMapping() {
                                 </Button>
                               </>
                             ) : (
-                              <span className="text-xs text-white/35">
+                              <span className="text-xs text-slate-400">
                                 Только просмотр
                               </span>
                             )}
@@ -1008,25 +1115,21 @@ export default function DictionariesMapping() {
         <div className="fixed inset-0 z-[9990]">
           <button
             type="button"
-            aria-label="Close modal"
+            aria-label="Закрыть окно"
             onClick={closeCreateModal}
-            className="absolute inset-0 bg-black/60 bg-[radial-gradient(1200px_600px_at_50%_20%,rgba(0,255,255,0.08),transparent_55%),radial-gradient(900px_500px_at_20%_80%,rgba(255,0,128,0.06),transparent_55%)] backdrop-blur-[2px]"
+            className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]"
           />
 
-          <div
-            className={cn(
-              "absolute left-1/2 top-1/2 w-[min(640px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2",
-              "rounded-[28px] border border-white/10 bg-[rgb(var(--panel))]/98",
-              "shadow-[0_30px_90px_rgba(0,0,0,0.60)] p-5"
-            )}
-          >
+          <div className="absolute left-1/2 top-1/2 w-[min(640px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-300 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.24)]">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-[11px] text-white/55">Mapping rule</div>
-                <div className="mt-1 text-lg font-semibold text-white/90">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Правило сопоставления
+                </div>
+                <div className="mt-1 text-lg font-semibold text-slate-950">
                   Добавить правило сопоставления
                 </div>
-                <div className="mt-2 text-sm text-white/60">
+                <div className="mt-2 text-sm leading-6 text-slate-600">
                   Это правило будет использоваться при нормализации названий ПО.
                 </div>
               </div>
@@ -1035,63 +1138,40 @@ export default function DictionariesMapping() {
                 type="button"
                 onClick={closeCreateModal}
                 disabled={createBusy}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.06] hover:text-white/90 disabled:opacity-50"
+                className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-950 disabled:opacity-50"
               >
-                Закрыть
+                <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="mt-5 grid gap-4">
               <div>
-                <div className="mb-2 text-xs font-medium text-white/55">Pattern</div>
-                <input
+                <FieldLabel>Pattern</FieldLabel>
+                <TextInput
                   value={newPattern}
                   onChange={(e) => setNewPattern(e.target.value)}
                   placeholder="Например: jetbrains"
-                  className={cn(
-                    "w-full rounded-2xl border border-white/10 bg-black/25",
-                    "px-3 py-2.5 text-sm text-white/85 outline-none",
-                    "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                  )}
                 />
               </div>
 
               <div>
-                <div className="mb-2 text-xs font-medium text-white/55">
-                  Каноническое название продукта
-                </div>
-                <input
+                <FieldLabel>Каноническое название продукта</FieldLabel>
+                <TextInput
                   value={newCanonicalProduct}
                   onChange={(e) => setNewCanonicalProduct(e.target.value)}
                   placeholder="Например: JetBrains"
-                  className={cn(
-                    "w-full rounded-2xl border border-white/10 bg-black/25",
-                    "px-3 py-2.5 text-sm text-white/85 outline-none",
-                    "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                  )}
                 />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <div className="mb-2 text-xs font-medium text-white/55">
-                    Match type
-                  </div>
-
-                  <button
-                    ref={createMatchTypeAnchorRef}
-                    type="button"
+                  <FieldLabel>Тип сопоставления</FieldLabel>
+                  <SelectDropdownButton
+                    refProp={createMatchTypeAnchorRef}
                     onClick={() => setCreateMatchTypeOpen((v) => !v)}
-                    className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/25",
-                      "px-3 py-2.5 text-sm text-white/85 outline-none transition",
-                      "hover:border-white/15 hover:bg-black/30",
-                      "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                    )}
                   >
-                    <span>{getMatchTypeSelectLabel(newMatchType)}</span>
-                    <ChevronDown className="h-4 w-4 shrink-0 text-white/45" />
-                  </button>
+                    {getMatchTypeSelectLabel(newMatchType)}
+                  </SelectDropdownButton>
 
                   <Dropdown
                     open={createMatchTypeOpen}
@@ -1101,14 +1181,12 @@ export default function DictionariesMapping() {
                     align="start"
                     className="p-1"
                   >
-                    {[
-                      { value: "contains", label: "Contains" },
-                      { value: "exact", label: "Exact" },
-                      { value: "regex", label: "Regex" },
-                    ].map((option) => {
-                      const active = newMatchType === option.value;
-
-                      return (
+                    <div className="rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                      {[
+                        { value: "contains", label: "Содержит" },
+                        { value: "exact", label: "Точно" },
+                        { value: "regex", label: "Regex" },
+                      ].map((option) => (
                         <button
                           key={option.value}
                           type="button"
@@ -1117,40 +1195,27 @@ export default function DictionariesMapping() {
                             setCreateMatchTypeOpen(false);
                           }}
                           className={cn(
-                            "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition",
-                            active
-                              ? "bg-cyan-300/14 text-cyan-100"
-                              : "text-white/78 hover:bg-white/[0.05] hover:text-white"
+                            "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition",
+                            newMatchType === option.value
+                              ? "bg-slate-100 text-slate-950"
+                              : "text-slate-700 hover:bg-slate-50"
                           )}
                         >
                           {option.label}
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </Dropdown>
                 </div>
 
                 <div>
-                  <div className="mb-2 text-xs font-medium text-white/55">
-                    Продукт из справочника (опционально)
-                  </div>
-
-                  <button
-                    ref={createProductAnchorRef}
-                    type="button"
+                  <FieldLabel>Продукт из справочника</FieldLabel>
+                  <SelectDropdownButton
+                    refProp={createProductAnchorRef}
                     onClick={() => setCreateProductDropdownOpen((v) => !v)}
-                    className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/25",
-                      "px-3 py-2.5 text-sm text-white/85 outline-none transition",
-                      "hover:border-white/15 hover:bg-black/30",
-                      "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                    )}
                   >
-                    <span className="truncate text-left">
-                      {getProductSelectLabel(products, newProductId)}
-                    </span>
-                    <ChevronDown className="h-4 w-4 shrink-0 text-white/45" />
-                  </button>
+                    {getProductSelectLabel(products, newProductId)}
+                  </SelectDropdownButton>
 
                   <Dropdown
                     open={createProductDropdownOpen}
@@ -1160,32 +1225,30 @@ export default function DictionariesMapping() {
                     align="start"
                     className="p-1"
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleCreateProductSelect("")}
-                      className={cn(
-                        "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition",
-                        !newProductId
-                          ? "bg-cyan-300/14 text-cyan-100"
-                          : "text-white/78 hover:bg-white/[0.05] hover:text-white"
-                      )}
-                    >
-                      Не выбран
-                    </button>
+                    <div className="max-h-[320px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => handleCreateProductSelect("")}
+                        className={cn(
+                          "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition",
+                          !newProductId
+                            ? "bg-slate-100 text-slate-950"
+                            : "text-slate-700 hover:bg-slate-50"
+                        )}
+                      >
+                        Не выбран
+                      </button>
 
-                    {products.map((product) => {
-                      const active = newProductId === String(product.id);
-
-                      return (
+                      {products.map((product) => (
                         <button
                           key={product.id}
                           type="button"
                           onClick={() => handleCreateProductSelect(String(product.id))}
                           className={cn(
-                            "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition",
-                            active
-                              ? "bg-cyan-300/14 text-cyan-100"
-                              : "text-white/78 hover:bg-white/[0.05] hover:text-white"
+                            "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition",
+                            newProductId === String(product.id)
+                              ? "bg-slate-100 text-slate-950"
+                              : "text-slate-700 hover:bg-slate-50"
                           )}
                         >
                           <span className="truncate">
@@ -1193,34 +1256,25 @@ export default function DictionariesMapping() {
                             {product.vendor ? ` — ${product.vendor}` : ""}
                           </span>
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </Dropdown>
                 </div>
               </div>
 
               {createError && (
-                <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100/90">
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {createError}
                 </div>
               )}
             </div>
 
             <div className="mt-5 flex items-center justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={createBusy}
-                onClick={closeCreateModal}
-              >
+              <Button variant="ghost" size="sm" disabled={createBusy} onClick={closeCreateModal}>
                 Отмена
               </Button>
 
-              <Button
-                size="sm"
-                disabled={createBusy}
-                onClick={() => void handleCreateRule()}
-              >
+              <Button size="sm" disabled={createBusy} onClick={() => void handleCreateRule()}>
                 {createBusy ? "Создание..." : "Создать правило"}
               </Button>
             </div>
@@ -1232,26 +1286,22 @@ export default function DictionariesMapping() {
         <div className="fixed inset-0 z-[9990]">
           <button
             type="button"
-            aria-label="Close modal"
+            aria-label="Закрыть окно"
             onClick={closeEditModal}
-            className="absolute inset-0 bg-black/60 bg-[radial-gradient(1200px_600px_at_50%_20%,rgba(0,255,255,0.08),transparent_55%),radial-gradient(900px_500px_at_20%_80%,rgba(255,0,128,0.06),transparent_55%)] backdrop-blur-[2px]"
+            className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]"
           />
 
-          <div
-            className={cn(
-              "absolute left-1/2 top-1/2 w-[min(640px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2",
-              "rounded-[28px] border border-white/10 bg-[rgb(var(--panel))]/98",
-              "shadow-[0_30px_90px_rgba(0,0,0,0.60)] p-5"
-            )}
-          >
+          <div className="absolute left-1/2 top-1/2 w-[min(640px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-300 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.24)]">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-[11px] text-white/55">Mapping rule</div>
-                <div className="mt-1 text-lg font-semibold text-white/90">
-                  Редактировать правило сопоставления
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Правило сопоставления
                 </div>
-                <div className="mt-2 text-sm text-white/60">
-                  Обнови параметры правила нормализации для выбранного продукта.
+                <div className="mt-1 text-lg font-semibold text-slate-950">
+                  Редактировать правило
+                </div>
+                <div className="mt-2 text-sm leading-6 text-slate-600">
+                  Обновите параметры правила нормализации.
                 </div>
               </div>
 
@@ -1259,63 +1309,40 @@ export default function DictionariesMapping() {
                 type="button"
                 onClick={closeEditModal}
                 disabled={editBusy}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.06] hover:text-white/90 disabled:opacity-50"
+                className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-950 disabled:opacity-50"
               >
-                Закрыть
+                <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="mt-5 grid gap-4">
               <div>
-                <div className="mb-2 text-xs font-medium text-white/55">Pattern</div>
-                <input
+                <FieldLabel>Pattern</FieldLabel>
+                <TextInput
                   value={editPattern}
                   onChange={(e) => setEditPattern(e.target.value)}
                   placeholder="Например: jetbrains"
-                  className={cn(
-                    "w-full rounded-2xl border border-white/10 bg-black/25",
-                    "px-3 py-2.5 text-sm text-white/85 outline-none",
-                    "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                  )}
                 />
               </div>
 
               <div>
-                <div className="mb-2 text-xs font-medium text-white/55">
-                  Каноническое название продукта
-                </div>
-                <input
+                <FieldLabel>Каноническое название продукта</FieldLabel>
+                <TextInput
                   value={editCanonicalProduct}
                   onChange={(e) => setEditCanonicalProduct(e.target.value)}
                   placeholder="Например: JetBrains"
-                  className={cn(
-                    "w-full rounded-2xl border border-white/10 bg-black/25",
-                    "px-3 py-2.5 text-sm text-white/85 outline-none",
-                    "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                  )}
                 />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <div className="mb-2 text-xs font-medium text-white/55">
-                    Match type
-                  </div>
-
-                  <button
-                    ref={editMatchTypeAnchorRef}
-                    type="button"
+                  <FieldLabel>Тип сопоставления</FieldLabel>
+                  <SelectDropdownButton
+                    refProp={editMatchTypeAnchorRef}
                     onClick={() => setEditMatchTypeOpen((v) => !v)}
-                    className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/25",
-                      "px-3 py-2.5 text-sm text-white/85 outline-none transition",
-                      "hover:border-white/15 hover:bg-black/30",
-                      "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                    )}
                   >
-                    <span>{getMatchTypeSelectLabel(editMatchType)}</span>
-                    <ChevronDown className="h-4 w-4 shrink-0 text-white/45" />
-                  </button>
+                    {getMatchTypeSelectLabel(editMatchType)}
+                  </SelectDropdownButton>
 
                   <Dropdown
                     open={editMatchTypeOpen}
@@ -1325,14 +1352,12 @@ export default function DictionariesMapping() {
                     align="start"
                     className="p-1"
                   >
-                    {[
-                      { value: "contains", label: "Contains" },
-                      { value: "exact", label: "Exact" },
-                      { value: "regex", label: "Regex" },
-                    ].map((option) => {
-                      const active = editMatchType === option.value;
-
-                      return (
+                    <div className="rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                      {[
+                        { value: "contains", label: "Содержит" },
+                        { value: "exact", label: "Точно" },
+                        { value: "regex", label: "Regex" },
+                      ].map((option) => (
                         <button
                           key={option.value}
                           type="button"
@@ -1341,40 +1366,27 @@ export default function DictionariesMapping() {
                             setEditMatchTypeOpen(false);
                           }}
                           className={cn(
-                            "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition",
-                            active
-                              ? "bg-cyan-300/14 text-cyan-100"
-                              : "text-white/78 hover:bg-white/[0.05] hover:text-white"
+                            "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition",
+                            editMatchType === option.value
+                              ? "bg-slate-100 text-slate-950"
+                              : "text-slate-700 hover:bg-slate-50"
                           )}
                         >
                           {option.label}
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </Dropdown>
                 </div>
 
                 <div>
-                  <div className="mb-2 text-xs font-medium text-white/55">
-                    Продукт из справочника (опционально)
-                  </div>
-
-                  <button
-                    ref={editProductAnchorRef}
-                    type="button"
+                  <FieldLabel>Продукт из справочника</FieldLabel>
+                  <SelectDropdownButton
+                    refProp={editProductAnchorRef}
                     onClick={() => setEditProductDropdownOpen((v) => !v)}
-                    className={cn(
-                      "flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/25",
-                      "px-3 py-2.5 text-sm text-white/85 outline-none transition",
-                      "hover:border-white/15 hover:bg-black/30",
-                      "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                    )}
                   >
-                    <span className="truncate text-left">
-                      {getProductSelectLabel(products, editProductId)}
-                    </span>
-                    <ChevronDown className="h-4 w-4 shrink-0 text-white/45" />
-                  </button>
+                    {getProductSelectLabel(products, editProductId)}
+                  </SelectDropdownButton>
 
                   <Dropdown
                     open={editProductDropdownOpen}
@@ -1384,32 +1396,30 @@ export default function DictionariesMapping() {
                     align="start"
                     className="p-1"
                   >
-                    <button
-                      type="button"
-                      onClick={() => handleEditProductSelect("")}
-                      className={cn(
-                        "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition",
-                        !editProductId
-                          ? "bg-cyan-300/14 text-cyan-100"
-                          : "text-white/78 hover:bg-white/[0.05] hover:text-white"
-                      )}
-                    >
-                      Не выбран
-                    </button>
+                    <div className="max-h-[320px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => handleEditProductSelect("")}
+                        className={cn(
+                          "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition",
+                          !editProductId
+                            ? "bg-slate-100 text-slate-950"
+                            : "text-slate-700 hover:bg-slate-50"
+                        )}
+                      >
+                        Не выбран
+                      </button>
 
-                    {products.map((product) => {
-                      const active = editProductId === String(product.id);
-
-                      return (
+                      {products.map((product) => (
                         <button
                           key={product.id}
                           type="button"
                           onClick={() => handleEditProductSelect(String(product.id))}
                           className={cn(
-                            "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition",
-                            active
-                              ? "bg-cyan-300/14 text-cyan-100"
-                              : "text-white/78 hover:bg-white/[0.05] hover:text-white"
+                            "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition",
+                            editProductId === String(product.id)
+                              ? "bg-slate-100 text-slate-950"
+                              : "text-slate-700 hover:bg-slate-50"
                           )}
                         >
                           <span className="truncate">
@@ -1417,34 +1427,25 @@ export default function DictionariesMapping() {
                             {product.vendor ? ` — ${product.vendor}` : ""}
                           </span>
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </Dropdown>
                 </div>
               </div>
 
               {editError && (
-                <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100/90">
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                   {editError}
                 </div>
               )}
             </div>
 
             <div className="mt-5 flex items-center justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={editBusy}
-                onClick={closeEditModal}
-              >
+              <Button variant="ghost" size="sm" disabled={editBusy} onClick={closeEditModal}>
                 Отмена
               </Button>
 
-              <Button
-                size="sm"
-                disabled={editBusy}
-                onClick={() => void handleUpdateRule()}
-              >
+              <Button size="sm" disabled={editBusy} onClick={() => void handleUpdateRule()}>
                 {editBusy ? "Сохранение..." : "Сохранить изменения"}
               </Button>
             </div>
@@ -1460,26 +1461,24 @@ export default function DictionariesMapping() {
         align="start"
         className="p-1"
       >
-        <button
-          type="button"
-          onClick={() => {
-            setSelectedProductFilter("");
-            setProductFilterOpen(false);
-          }}
-          className={cn(
-            "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition",
-            !selectedProductFilter
-              ? "bg-cyan-300/14 text-cyan-100"
-              : "text-white/78 hover:bg-white/[0.05] hover:text-white"
-          )}
-        >
-          Все продукты
-        </button>
+        <div className="max-h-[320px] overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedProductFilter("");
+              setProductFilterOpen(false);
+            }}
+            className={cn(
+              "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition",
+              !selectedProductFilter
+                ? "bg-slate-100 text-slate-950"
+                : "text-slate-700 hover:bg-slate-50"
+            )}
+          >
+            Все продукты
+          </button>
 
-        {products.map((product) => {
-          const active = selectedProductFilter === String(product.id);
-
-          return (
+          {products.map((product) => (
             <button
               key={product.id}
               type="button"
@@ -1488,10 +1487,10 @@ export default function DictionariesMapping() {
                 setProductFilterOpen(false);
               }}
               className={cn(
-                "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition",
-                active
-                  ? "bg-cyan-300/14 text-cyan-100"
-                  : "text-white/78 hover:bg-white/[0.05] hover:text-white"
+                "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition",
+                selectedProductFilter === String(product.id)
+                  ? "bg-slate-100 text-slate-950"
+                  : "text-slate-700 hover:bg-slate-50"
               )}
             >
               <span className="truncate">
@@ -1499,8 +1498,8 @@ export default function DictionariesMapping() {
                 {product.vendor ? ` — ${product.vendor}` : ""}
               </span>
             </button>
-          );
-        })}
+          ))}
+        </div>
       </Dropdown>
 
       <Dropdown
@@ -1511,15 +1510,13 @@ export default function DictionariesMapping() {
         align="start"
         className="p-1"
       >
-        {[
-          { value: "", label: "Все типы" },
-          { value: "contains", label: "Contains" },
-          { value: "exact", label: "Exact" },
-          { value: "regex", label: "Regex" },
-        ].map((option) => {
-          const active = selectedMatchTypeFilter === option.value;
-
-          return (
+        <div className="rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+          {[
+            { value: "", label: "Все типы" },
+            { value: "contains", label: "Содержит" },
+            { value: "exact", label: "Точно" },
+            { value: "regex", label: "Regex" },
+          ].map((option) => (
             <button
               key={option.value || "all"}
               type="button"
@@ -1528,16 +1525,16 @@ export default function DictionariesMapping() {
                 setMatchTypeFilterOpen(false);
               }}
               className={cn(
-                "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition",
-                active
-                  ? "bg-cyan-300/14 text-cyan-100"
-                  : "text-white/78 hover:bg-white/[0.05] hover:text-white"
+                "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition",
+                selectedMatchTypeFilter === option.value
+                  ? "bg-slate-100 text-slate-950"
+                  : "text-slate-700 hover:bg-slate-50"
               )}
             >
               {option.label}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </Dropdown>
 
       <Dropdown
@@ -1548,17 +1545,15 @@ export default function DictionariesMapping() {
         align="start"
         className="p-1"
       >
-        {[
-          { value: "updated_desc", label: "Сначала обновлённые" },
-          { value: "updated_asc", label: "Сначала старые обновления" },
-          { value: "created_desc", label: "Сначала новые" },
-          { value: "created_asc", label: "Сначала старые" },
-          { value: "pattern_asc", label: "Pattern A → Z" },
-          { value: "pattern_desc", label: "Pattern Z → A" },
-        ].map((option) => {
-          const active = sortBy === option.value;
-
-          return (
+        <div className="rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+          {[
+            { value: "updated_desc", label: "Сначала обновлённые" },
+            { value: "updated_asc", label: "Сначала старые обновления" },
+            { value: "created_desc", label: "Сначала новые" },
+            { value: "created_asc", label: "Сначала старые" },
+            { value: "pattern_asc", label: "Pattern A → Z" },
+            { value: "pattern_desc", label: "Pattern Z → A" },
+          ].map((option) => (
             <button
               key={option.value}
               type="button"
@@ -1567,16 +1562,16 @@ export default function DictionariesMapping() {
                 setSortOpen(false);
               }}
               className={cn(
-                "flex w-full items-center rounded-xl px-3 py-2 text-left text-sm transition",
-                active
-                  ? "bg-cyan-300/14 text-cyan-100"
-                  : "text-white/78 hover:bg-white/[0.05] hover:text-white"
+                "flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition",
+                sortBy === option.value
+                  ? "bg-slate-100 text-slate-950"
+                  : "text-slate-700 hover:bg-slate-50"
               )}
             >
               {option.label}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </Dropdown>
 
       <ConfirmDialog
@@ -1592,7 +1587,6 @@ export default function DictionariesMapping() {
         busy={deleteBusy}
         onCancel={confirmDelete.cancel}
         onConfirm={confirmDelete.confirm}
-        panelClassName="bg-[rgb(var(--panel))]/98"
       />
     </div>
   );

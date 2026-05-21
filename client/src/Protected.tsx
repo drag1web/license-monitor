@@ -1,7 +1,7 @@
 import type React from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldCheck, Loader2, LogIn } from "lucide-react";
+import { ShieldCheck, Loader2 } from "lucide-react";
 import { useAuth } from "./auth/AuthContext";
 import { cn } from "./ui/cn/cn";
 

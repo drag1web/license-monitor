@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { AlertTriangle } from "lucide-react";
 import { cn } from "../cn/cn";
 import { Button } from "../Button";
 
@@ -7,21 +8,15 @@ type Props = {
   open: boolean;
   title: string;
   description?: string;
-
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
-
-  /** Если задано — нужно ввести эту фразу, иначе Confirm disabled */
   requireText?: string;
   value?: string;
   onValueChange?: (v: string) => void;
-
   busy?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
-
-  /** Можно кастомизировать фон */
   overlayClassName?: string;
   panelClassName?: string;
 };
@@ -30,8 +25,8 @@ export function ConfirmDialog({
   open,
   title,
   description,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
+  confirmLabel = "Подтвердить",
+  cancelLabel = "Отмена",
   danger,
   requireText,
   value = "",
@@ -53,11 +48,7 @@ export function ConfirmDialog({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
       if (e.key === "Enter") {
-        if (requireText) {
-          if (value === requireText) onConfirm();
-        } else {
-          onConfirm();
-        }
+        if (!requireText || value === requireText) onConfirm();
       }
     };
 
@@ -76,67 +67,77 @@ export function ConfirmDialog({
 
   return createPortal(
     <div className="fixed inset-0 z-[10000]">
-      {/* OVERLAY / BACKDROP */}
       <button
         type="button"
-        aria-label="Close dialog"
+        aria-label="Закрыть окно"
         onClick={onCancel}
         className={cn(
-          "absolute inset-0",
-          // ✅ вот этот фон — чтобы не сливалось
-          "bg-black/60",
-          // ✅ лёгкая виньетка/градиент, выглядит богаче
-          "bg-[radial-gradient(1200px_600px_at_50%_20%,rgba(0,255,255,0.08),transparent_55%),radial-gradient(900px_500px_at_20%_80%,rgba(255,0,128,0.06),transparent_55%)]",
-          "backdrop-blur-[2px]",
+          "absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]",
           overlayClassName
         )}
       />
 
-      {/* PANEL */}
       <div
         role="dialog"
         aria-modal="true"
         onMouseDown={(e) => e.stopPropagation()}
         className={cn(
-          "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
-          "w-[min(560px,calc(100vw-24px))]",
-          "rounded-[28px] border border-white/10",
-          "bg-[rgb(var(--panel))]/98",
-          "shadow-[0_30px_90px_rgba(0,0,0,0.60)]",
-          "p-5",
-          "outline-none",
+          "absolute left-1/2 top-1/2 w-[min(520px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2",
+          "rounded-2xl border border-slate-300 bg-white p-6",
+          "shadow-[0_18px_60px_rgba(15,23,42,0.22)]",
           panelClassName
         )}
       >
-        <div className="flex items-start gap-3">
+        <div className="flex gap-4">
+          <div
+            className={cn(
+              "grid h-11 w-11 shrink-0 place-items-center rounded-xl border",
+              danger
+                ? "border-red-200 bg-red-50 text-red-600"
+                : "border-slate-200 bg-slate-50 text-slate-600"
+            )}
+          >
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+
           <div className="min-w-0">
-            <div className="text-[11px] text-white/55">Confirmation</div>
-            <div className="mt-1 text-lg font-semibold text-white/90">{title}</div>
-            {description && <div className="mt-2 text-sm text-white/60">{description}</div>}
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Подтверждение действия
+            </div>
+
+            <div className="mt-1 text-lg font-semibold text-slate-950">
+              {title}
+            </div>
+
+            {description && (
+              <div className="mt-2 text-sm leading-6 text-slate-600">
+                {description}
+              </div>
+            )}
           </div>
         </div>
 
         {requireText && (
-          <div className="mt-4">
-            <div className="text-xs text-white/50">
-              Type: <span className="text-white/80 font-semibold">{requireText}</span>
+          <div className="mt-5">
+            <div className="text-sm text-slate-600">
+              Введите:{" "}
+              <span className="font-semibold text-slate-950">
+                {requireText}
+              </span>
             </div>
+
             <input
               ref={inputRef}
               value={value}
               onChange={(e) => onValueChange?.(e.target.value)}
-              className={cn(
-                "mt-2 w-full rounded-2xl border border-white/10 bg-black/25",
-                "px-3 py-2 text-sm text-white/85 outline-none",
-                "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-              )}
+              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-600 focus:ring-2 focus:ring-slate-100"
               placeholder={requireText}
               spellCheck={false}
             />
           </div>
         )}
 
-        <div className="mt-5 flex items-center justify-end gap-2">
+        <div className="mt-6 flex items-center justify-end gap-2">
           <Button variant="ghost" size="sm" disabled={busy} onClick={onCancel}>
             {cancelLabel}
           </Button>
@@ -146,9 +147,9 @@ export function ConfirmDialog({
             size="sm"
             disabled={busy || !canConfirm}
             onClick={onConfirm}
-            className="min-w-[140px] justify-center"
+            className="min-w-[140px]"
           >
-            {busy ? "Working…" : confirmLabel}
+            {busy ? "Выполняется..." : confirmLabel}
           </Button>
         </div>
       </div>

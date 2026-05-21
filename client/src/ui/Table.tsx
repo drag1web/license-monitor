@@ -2,77 +2,32 @@ import React from "react";
 import { cn } from "./cn/cn";
 import { ChevronDown, ChevronUp, SearchX } from "lucide-react";
 
-const TOKENS = {
-  container:
-    "relative rounded-2xl " +
-    "border border-white/[0.08] " +
-    "bg-gradient-to-b from-slate-950/70 via-slate-950/45 to-slate-950/25 " +
-    "backdrop-blur-xl " +
-    "shadow-[0_18px_60px_rgba(0,0,0,0.45)] " +
-    "ring-1 ring-white/[0.04]",
+type Density = "comfortable" | "compact";
+type SortDir = "asc" | "desc" | null;
 
-  topGlow:
-    "pointer-events-none absolute inset-x-0 top-0 h-px " +
-    "bg-gradient-to-r from-transparent via-cyan-300/20 to-transparent",
-
-  scroll:
-    "overflow-auto " +
-    "[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 " +
-    "[&::-webkit-scrollbar-thumb]:rounded-full " +
-    "[&::-webkit-scrollbar-thumb]:bg-white/10 " +
-    "hover:[&::-webkit-scrollbar-thumb]:bg-white/15 " +
-    "[&::-webkit-scrollbar-track]:bg-transparent",
-
-  table: "w-full border-collapse text-sm",
-
-  thead:
-    "bg-white/[0.03] " +
-    "shadow-[inset_0_-1px_0_rgba(255,255,255,0.06)]",
-
-  thBase:
-    "text-left font-semibold tracking-[0.01em] " +
-    "text-white/70 " +
-    "border-b border-white/[0.08] " +
-    "px-4 py-3 whitespace-nowrap",
-
-  tdBase:
-    "px-4 py-3 text-white/85 " +
-    "border-b border-white/[0.06] align-middle",
-
-  trRow:
-    "transition-colors " +
-    "hover:bg-white/[0.035] " +
-    "focus-within:bg-white/[0.035]",
-
-  zebra:
-    "[&>tbody>tr:nth-child(even)]:bg-white/[0.015] " +
-    "[&>tbody>tr:nth-child(odd)]:bg-transparent",
-
-  density: {
-    comfortable: {
-      th: "py-3 px-4",
-      td: "py-3 px-4",
-    },
-    compact: {
-      th: "py-2 px-3",
-      td: "py-2 px-3",
-    },
+const density = {
+  comfortable: {
+    th: "px-4 py-3",
+    td: "px-4 py-3",
   },
-
-  sectionDivider:
-    "h-px bg-gradient-to-r from-transparent via-white/10 to-transparent",
+  compact: {
+    th: "px-3 py-2",
+    td: "px-3 py-2",
+  },
 };
 
 export function Table({
   className,
-  children,
   ...p
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn(TOKENS.container, className)} {...p}>
-      <div className={TOKENS.topGlow} />
-      {children}
-    </div>
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm",
+        className
+      )}
+      {...p}
+    />
   );
 }
 
@@ -80,10 +35,8 @@ export function TableScroll({
   className,
   ...p
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn(TOKENS.scroll, className)} {...p} />;
+  return <div className={cn("overflow-auto", className)} {...p} />;
 }
-
-type Density = "comfortable" | "compact";
 
 type TableInnerProps = React.TableHTMLAttributes<HTMLTableElement> & {
   zebra?: boolean;
@@ -96,20 +49,18 @@ export function TableInner({
   className,
   zebra = true,
   stickyHeader = false,
-  density = "comfortable",
+  density: d = "comfortable",
   fixedLayout = false,
   ...p
 }: TableInnerProps) {
   return (
     <table
-      data-density={density}
+      data-density={d}
       className={cn(
-        TOKENS.table,
+        "w-full border-collapse text-sm",
         fixedLayout ? "table-fixed" : "table-auto",
-        zebra && TOKENS.zebra,
-        stickyHeader &&
-          "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 " +
-            "[&_thead_th]:backdrop-blur-xl [&_thead_th]:bg-slate-950/80",
+        zebra && "[&>tbody>tr:nth-child(even)]:bg-slate-50",
+        stickyHeader && "[&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-slate-50",
         className
       )}
       {...p}
@@ -117,18 +68,17 @@ export function TableInner({
   );
 }
 
-export function THead({
-  className,
-  ...p
-}: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <thead className={cn(TOKENS.thead, className)} {...p} />;
+export function THead(props: React.HTMLAttributes<HTMLTableSectionElement>) {
+  return (
+    <thead
+      className={cn("bg-slate-50", props.className)}
+      {...props}
+    />
+  );
 }
 
-export function TBody({
-  className,
-  ...p
-}: React.HTMLAttributes<HTMLTableSectionElement>) {
-  return <tbody className={cn(className)} {...p} />;
+export function TBody(props: React.HTMLAttributes<HTMLTableSectionElement>) {
+  return <tbody {...props} />;
 }
 
 export function Tr({
@@ -136,12 +86,23 @@ export function Tr({
   interactive = true,
   ...p
 }: React.HTMLAttributes<HTMLTableRowElement> & { interactive?: boolean }) {
-  return <tr className={cn(interactive && TOKENS.trRow, className)} {...p} />;
+  return (
+    <tr
+      className={cn(interactive && "hover:bg-slate-50", className)}
+      {...p}
+    />
+  );
 }
 
-function densityClass(kind: "th" | "td", density: Density | undefined): string {
-  const d = density ?? "comfortable";
-  return TOKENS.density[d][kind];
+function useDensity(ref: React.RefObject<HTMLElement | null>) {
+  const [d, setD] = React.useState<Density>("comfortable");
+
+  React.useEffect(() => {
+    const table = ref.current?.closest("table");
+    setD((table?.getAttribute("data-density") as Density) || "comfortable");
+  }, [ref]);
+
+  return d;
 }
 
 export function Th({
@@ -149,23 +110,14 @@ export function Th({
   ...p
 }: React.ThHTMLAttributes<HTMLTableCellElement>) {
   const ref = React.useRef<HTMLTableCellElement | null>(null);
-  const [density, setDensity] = React.useState<Density>("comfortable");
-
-  React.useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const t = el.closest("table");
-    const d = (t?.getAttribute("data-density") as Density) || "comfortable";
-    setDensity(d);
-  }, []);
+  const d = useDensity(ref);
 
   return (
     <th
       ref={ref}
       className={cn(
-        TOKENS.thBase,
-        densityClass("th", density),
-        "bg-gradient-to-b from-white/[0.05] to-white/[0.02]",
+        "whitespace-nowrap border-b border-slate-200 text-left font-semibold text-slate-600",
+        density[d].th,
         className
       )}
       {...p}
@@ -178,23 +130,14 @@ export function Td({
   ...p
 }: React.TdHTMLAttributes<HTMLTableCellElement>) {
   const ref = React.useRef<HTMLTableCellElement | null>(null);
-  const [density, setDensity] = React.useState<Density>("comfortable");
-
-  React.useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const t = el.closest("table");
-    const d = (t?.getAttribute("data-density") as Density) || "comfortable";
-    setDensity(d);
-  }, []);
+  const d = useDensity(ref);
 
   return (
     <td
       ref={ref}
       className={cn(
-        TOKENS.tdBase,
-        densityClass("td", density),
-        "[&:has(:focus-visible)]:ring-2 [&:has(:focus-visible)]:ring-cyan-300/25 [&:has(:focus-visible)]:rounded-xl",
+        "border-b border-slate-100 align-middle text-slate-800",
+        density[d].td,
         className
       )}
       {...p}
@@ -216,17 +159,17 @@ export function TableCaption({
   return (
     <div
       className={cn(
-        "flex items-start gap-3 px-4 pt-4 pb-3",
-        "border-b border-white/[0.06]",
+        "flex items-start gap-3 border-b border-slate-200 px-4 py-3",
         className
       )}
     >
       <div className="min-w-0">
-        <div className="text-sm font-semibold tracking-[0.02em] text-white/85">
+        <div className="text-sm font-semibold text-slate-900">
           {title}
         </div>
+
         {description && (
-          <div className="mt-1 text-[12px] text-white/45 leading-snug">
+          <div className="mt-1 text-xs text-slate-500">
             {description}
           </div>
         )}
@@ -244,8 +187,7 @@ export function TableToolbar({
   return (
     <div
       className={cn(
-        "px-4 py-3 flex items-center gap-2",
-        "border-b border-white/[0.06]",
+        "flex items-center gap-2 border-b border-slate-200 px-4 py-3",
         className
       )}
     >
@@ -255,10 +197,8 @@ export function TableToolbar({
 }
 
 export function TableSectionDivider({ className }: { className?: string }) {
-  return <div className={cn(TOKENS.sectionDivider, className)} />;
+  return <div className={cn("h-px bg-slate-200", className)} />;
 }
-
-type SortDir = "asc" | "desc" | null;
 
 export function SortTh({
   className,
@@ -275,13 +215,6 @@ export function SortTh({
   hint?: string;
   className?: string;
 }) {
-  const justify =
-    align === "left"
-      ? "justify-start text-left"
-      : align === "center"
-      ? "justify-center text-center"
-      : "justify-end text-right";
-
   const Icon = dir === "asc" ? ChevronUp : dir === "desc" ? ChevronDown : null;
 
   return (
@@ -291,24 +224,24 @@ export function SortTh({
         title={hint ?? "Сортировать"}
         onClick={onToggle}
         className={cn(
-          "group inline-flex w-full min-w-0 items-center gap-2",
-          justify,
-          "outline-none rounded-xl px-2 py-1 -mx-2 -my-1",
-          onToggle
-            ? "hover:bg-white/[0.05] active:bg-white/[0.07] focus-visible:ring-2 focus-visible:ring-cyan-300/25 cursor-pointer"
-            : "cursor-default"
+          "inline-flex w-full items-center gap-2 rounded-md px-1 py-0.5",
+          align === "left"
+            ? "justify-start"
+            : align === "center"
+              ? "justify-center"
+              : "justify-end",
+          onToggle && "hover:bg-slate-200"
         )}
       >
-        <span className="min-w-0 whitespace-nowrap">{label}</span>
+        <span>{label}</span>
 
         {onToggle && (
-          <span
-            className={cn(
-              "shrink-0 inline-flex items-center",
-              "text-white/45 group-hover:text-white/70 transition-colors"
+          <span className="text-slate-400">
+            {Icon ? (
+              <Icon className="h-3.5 w-3.5" />
+            ) : (
+              <span className="block h-3.5 w-3.5" />
             )}
-          >
-            {Icon ? <Icon className="h-3.5 w-3.5" /> : <span className="h-3.5 w-3.5" />}
           </span>
         )}
       </button>
@@ -317,8 +250,8 @@ export function SortTh({
 }
 
 export function TableEmpty({
-  title = "Nothing here yet",
-  description = "Try changing filters or refresh the data.",
+  title = "Нет данных",
+  description = "Измените фильтры или обновите данные.",
   className,
   action,
 }: {
@@ -328,19 +261,21 @@ export function TableEmpty({
   className?: string;
 }) {
   return (
-    <div className={cn("px-6 py-10 flex flex-col items-center text-center gap-3", className)}>
-      <div
-        className={cn(
-          "h-10 w-10 rounded-2xl grid place-items-center",
-          "bg-white/[0.04] border border-white/[0.08]",
-          "shadow-[0_14px_40px_rgba(0,0,0,0.35)]"
-        )}
-      >
-        <SearchX className="h-5 w-5 text-cyan-200/80" />
+    <div
+      className={cn(
+        "flex flex-col items-center gap-3 px-6 py-10 text-center",
+        className
+      )}
+    >
+      <div className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-slate-50">
+        <SearchX className="h-5 w-5 text-slate-500" />
       </div>
 
-      <div className="text-sm font-semibold text-white/85">{title}</div>
-      <div className="max-w-[48ch] text-[12px] text-white/45 leading-relaxed">
+      <div className="text-sm font-semibold text-slate-900">
+        {title}
+      </div>
+
+      <div className="max-w-[48ch] text-xs leading-relaxed text-slate-500">
         {description}
       </div>
 
@@ -364,22 +299,13 @@ export function TableSkeleton({
         {Array.from({ length: rows }).map((_, r) => (
           <div
             key={r}
-            className={cn(
-              "grid gap-2 rounded-2xl border border-white/[0.06]",
-              "bg-white/[0.02] px-3 py-2"
-            )}
-            style={{
-              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-            }}
+            className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+            style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
           >
             {Array.from({ length: cols }).map((__, c) => (
               <div
                 key={c}
-                className={cn(
-                  "h-4 rounded-lg",
-                  "bg-gradient-to-r from-white/[0.06] via-white/[0.10] to-white/[0.06]",
-                  "animate-pulse"
-                )}
+                className="h-4 animate-pulse rounded bg-slate-200"
               />
             ))}
           </div>

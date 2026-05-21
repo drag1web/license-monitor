@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Play, ArrowUpRight } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 
-import { getLicenses, upsertLicense, removeLicense, type LicenseRow } from "../api";
+import {
+  getLicenses,
+  upsertLicense,
+  removeLicense,
+  runCheck,
+  type LicenseRow,
+} from "../api";
+
 import { useToast } from "../ui/toast";
 import { ViewerNotice } from "../components/ViewerNotice";
 import { useAuth } from "../auth/AuthContext";
@@ -79,12 +87,15 @@ export function nextDir(d: "asc" | "desc" | null): "asc" | "desc" {
 export default function Licenses() {
   const toast = useToast();
   const confirm = useConfirmDialog();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const { settings, setSettings } = useSettings();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  // mounted guard (avoid setState after unmount)
   const mounted = useRef(true);
+
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -97,9 +108,6 @@ export default function Licenses() {
 
   const [rows, setRows] = useState<LicenseRow[]>([]);
 
-  // -----------------------------
-  // Filters / view defaults from settings
-  // -----------------------------
   const [q, setQ] = useState("");
 
   const [mode, setMode] = useState<Mode>(() => settings.data.defaultModeLicenses as Mode);
@@ -109,38 +117,33 @@ export default function Licenses() {
   const [showType, setShowType] = useState(() => settings.data.showType);
   const [showNote, setShowNote] = useState(() => settings.data.showNote);
 
-  // sort
   const [sortKey, setSortKey] = useState<SortKey>("status");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  // editor
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(() => makeEmptyDraft());
   const [saving, setSaving] = useState(false);
 
-  // pinned
   const [pinned, setPinned] = useState<Set<string>>(() => loadPinned());
 
-  // bulk select
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
 
-  // inline seats edit
   const [editingSeatsId, setEditingSeatsId] = useState<string | null>(null);
   const [tmpUsed, setTmpUsed] = useState<number>(0);
   const [tmpTotal, setTmpTotal] = useState<number>(0);
 
-  // row menu
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const menuAnchorRef = useRef<HTMLElement | null>(null);
 
-  // ------------------------------------------
-  // Load licenses
-  // ------------------------------------------
+  const [registryChanged, setRegistryChanged] = useState(false);
+  const [runBusy, setRunBusy] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     setErr("");
+
     try {
       const data = await getLicenses();
       if (!mounted.current) return;
@@ -159,23 +162,32 @@ export default function Licenses() {
     load();
   }, [load]);
 
-  // persist pinned
   useEffect(() => {
     savePinned(pinned);
   }, [pinned]);
 
-  // ------------------------------------------
-  // rememberFilters (q/sort) restore + persist
-  // ------------------------------------------
+  useEffect(() => {
+    const urlQ = searchParams.get("q");
+
+    if (urlQ && urlQ !== q) {
+      setQ(urlQ);
+      setMode("all");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   useEffect(() => {
     if (!settings.rememberFilters) {
       clearSavedFilters();
       return;
     }
+
+    const urlQ = searchParams.get("q");
+    if (urlQ) return;
+
     const saved = readSavedFilters();
     if (!saved) return;
 
-    // apply once on mount/settings toggle
     setQ(saved.q);
     setMode(saved.mode);
     setSortKey(saved.sortKey);
@@ -188,9 +200,6 @@ export default function Licenses() {
     writeSavedFilters({ q, mode, sortKey, sortDir });
   }, [settings.rememberFilters, q, mode, sortKey, sortDir]);
 
-  // ------------------------------------------
-  // Sync: UI -> Settings (persist defaults)
-  // ------------------------------------------
   useEffect(() => {
     setSettings((s) => (s.density === density ? s : { ...s, density: density }));
   }, [density, setSettings]);
@@ -215,22 +224,18 @@ export default function Licenses() {
 
   useEffect(() => {
     setSettings((s) =>
-      s.data.defaultModeLicenses === mode ? s : { ...s, data: { ...s.data, defaultModeLicenses: mode } }
+      s.data.defaultModeLicenses === mode
+        ? s
+        : { ...s, data: { ...s.data, defaultModeLicenses: mode } }
     );
   }, [mode, setSettings]);
 
-  // ------------------------------------------
-  // Sync: Settings -> UI (if changed from Settings page)
-  // ------------------------------------------
   useEffect(() => setDensity(settings.density as Density), [settings.density]);
   useEffect(() => setShowVendor(settings.data.showVendor), [settings.data.showVendor]);
   useEffect(() => setShowType(settings.data.showType), [settings.data.showType]);
   useEffect(() => setShowNote(settings.data.showNote), [settings.data.showNote]);
   useEffect(() => setMode(settings.data.defaultModeLicenses as Mode), [settings.data.defaultModeLicenses]);
 
-  // ------------------------------------------
-  // Derived data
-  // ------------------------------------------
   const isEdit = useMemo(() => rows.some((r) => r.id === draft.id), [rows, draft.id]);
 
   const counts = useMemo(() => {
@@ -242,6 +247,7 @@ export default function Licenses() {
     for (const x of rows) {
       const used = safeNum(x.seats_used);
       const totalSeats = safeNum(x.seats_total);
+
       if (used > totalSeats) deficit++;
 
       const exp = toneFromExpires(x.expires_at ?? null);
@@ -274,6 +280,7 @@ export default function Licenses() {
         if (mode === "deficit") return deficit;
         if (mode === "expiring") return exp === "warn" || exp === "bad";
         if (mode === "risk") return isRisk;
+
         return true;
       });
   }, [rows, q, mode, pinned]);
@@ -281,14 +288,73 @@ export default function Licenses() {
   const sorted = useMemo(() => {
     const arr = [...filtered];
     arr.sort(cmp(sortKey, sortDir));
-    // pinned always first (stable)
     arr.sort((a, b) => (pinned.has(b.id) ? 1 : 0) - (pinned.has(a.id) ? 1 : 0));
     return arr;
   }, [filtered, sortKey, sortDir, pinned]);
 
-  // ------------------------------------------
-  // UI actions
-  // ------------------------------------------
+  const clearUrlSearch = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("q");
+    setSearchParams(next, { replace: true });
+    setQ("");
+  }, [searchParams, setSearchParams]);
+
+  async function runCheckAndOpen() {
+    if (!isAdmin) {
+      toast.push({
+        tone: "error",
+        title: "Недостаточно прав",
+        message: "Только admin может запускать проверку.",
+      });
+      return;
+    }
+
+    setRunBusy(true);
+    setErr("");
+
+    try {
+      const out = await runCheck();
+
+      if (!out.ok) {
+        throw new Error(out.error || "Не удалось запустить проверку");
+      }
+
+      setRegistryChanged(false);
+      window.dispatchEvent(new CustomEvent("alerts:refresh"));
+
+      if (out.runId) {
+        toast.push({
+          tone: "success",
+          title: "Проверка завершена",
+          message: `Открываю новый запуск #${out.runId}.`,
+        });
+
+        navigate(`/runs/${out.runId}`);
+        return;
+      }
+
+      toast.push({
+        tone: "success",
+        title: "Проверка завершена",
+        message: "Сервер не вернул ID запуска. Откройте историю запусков.",
+      });
+
+      navigate("/runs");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+
+      toast.push({
+        tone: "error",
+        title: "Ошибка проверки",
+        message: msg,
+      });
+
+      setErr(msg);
+    } finally {
+      setRunBusy(false);
+    }
+  }
+
   const openAdd = useCallback(() => {
     if (!isAdmin) {
       toast.push({
@@ -303,19 +369,22 @@ export default function Licenses() {
     setOpen(true);
   }, [isAdmin, toast]);
 
-  const openEditRow = useCallback((row: LicenseRow) => {
-    if (!isAdmin) {
-      toast.push({
-        tone: "error",
-        title: "Недостаточно прав",
-        message: "Только admin может редактировать лицензии.",
-      });
-      return;
-    }
+  const openEditRow = useCallback(
+    (row: LicenseRow) => {
+      if (!isAdmin) {
+        toast.push({
+          tone: "error",
+          title: "Недостаточно прав",
+          message: "Только admin может редактировать лицензии.",
+        });
+        return;
+      }
 
-    setDraft(fromRow(row));
-    setOpen(true);
-  }, [isAdmin, toast]);
+      setDraft(fromRow(row));
+      setOpen(true);
+    },
+    [isAdmin, toast]
+  );
 
   const closeEditor = useCallback(() => setOpen(false), []);
 
@@ -390,6 +459,7 @@ export default function Licenses() {
 
   const save = useCallback(async () => {
     const msg = validateDraft(draft);
+
     if (!isAdmin) {
       toast.push({
         tone: "error",
@@ -405,6 +475,7 @@ export default function Licenses() {
     }
 
     setSaving(true);
+
     try {
       const row = toRow(draft);
       const saved = await upsertLicense(row);
@@ -419,10 +490,16 @@ export default function Licenses() {
         return [saved, ...prev];
       });
 
+      setRegistryChanged(true);
+
       toast.push({
         tone: "success",
         title: "Сохранено",
-        message: `${saved.product} • ${saved.seats_used}/${saved.seats_total}`,
+        message: `${saved.product} • ${saved.seats_used}/${saved.seats_total}. Для обновления результатов запустите проверку.`,
+        action: {
+          label: "Запустить",
+          onClick: () => void runCheckAndOpen(),
+        },
       });
 
       setOpen(false);
@@ -437,6 +514,7 @@ export default function Licenses() {
   const askDelete = useCallback(
     async (title: string, description: string, confirmLabel: string) => {
       if (!settings.confirmBeforeDelete) return true;
+
       return await confirm.ask({
         title,
         description,
@@ -464,17 +542,31 @@ export default function Licenses() {
         "Запись будет удалена из local registry.",
         "Delete"
       );
+
       if (!ok) return;
 
       try {
         await removeLicense(row.id);
+
         setRows((prev) => prev.filter((x) => x.id !== row.id));
+
         setSelected((prev) => {
           const next = new Set(prev);
           next.delete(row.id);
           return next;
         });
-        toast.push({ tone: "info", title: "Удалено", message: row.product });
+
+        setRegistryChanged(true);
+
+        toast.push({
+          tone: "info",
+          title: "Удалено",
+          message: `${row.product}. Для обновления результатов запустите проверку.`,
+          action: {
+            label: "Запустить",
+            onClick: () => void runCheckAndOpen(),
+          },
+        });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         toast.push({ tone: "error", title: "Удаление не удалось", message: msg });
@@ -485,6 +577,7 @@ export default function Licenses() {
 
   const bulkDelete = useCallback(async () => {
     const ids = Array.from(selected);
+
     if (!isAdmin) {
       toast.push({
         tone: "error",
@@ -493,6 +586,7 @@ export default function Licenses() {
       });
       return;
     }
+
     if (ids.length === 0) return;
 
     const ok = await askDelete(
@@ -500,9 +594,11 @@ export default function Licenses() {
       "Будут удалены выбранные записи из local registry.",
       "Delete selected"
     );
+
     if (!ok) return;
 
     setBulkBusy(true);
+
     try {
       const results = await Promise.all(
         ids.map(async (id) => {
@@ -522,6 +618,7 @@ export default function Licenses() {
       if (okIds.size) {
         setRows((prev) => prev.filter((x) => !okIds.has(x.id)));
         setSelected(new Set());
+        setRegistryChanged(true);
       }
 
       if (failed.length) {
@@ -531,7 +628,15 @@ export default function Licenses() {
           message: `Failed: ${failed.length}. Example: ${failed[0].id} — ${failed[0].error ?? "unknown"}`,
         });
       } else {
-        toast.push({ tone: "success", title: "Deleted", message: `Deleted: ${okIds.size}` });
+        toast.push({
+          tone: "success",
+          title: "Deleted",
+          message: `Deleted: ${okIds.size}. Для обновления результатов запустите проверку.`,
+          action: {
+            label: "Запустить",
+            onClick: () => void runCheckAndOpen(),
+          },
+        });
       }
 
       stopSelectMode();
@@ -543,6 +648,7 @@ export default function Licenses() {
   const seedDemo = useCallback(() => {
     const now = new Date();
     const iso = (d: Date) => d.toISOString().slice(0, 10);
+
     if (!isAdmin) {
       toast.push({
         tone: "error",
@@ -594,7 +700,19 @@ export default function Licenses() {
     (async () => {
       try {
         for (const r of demo) await upsertLicense(r);
-        toast.push({ tone: "success", title: "Seed demo", message: "Демо-лицензии добавлены." });
+
+        setRegistryChanged(true);
+
+        toast.push({
+          tone: "success",
+          title: "Seed demo",
+          message: "Демо-лицензии добавлены. Для обновления результатов запустите проверку.",
+          action: {
+            label: "Запустить",
+            onClick: () => void runCheckAndOpen(),
+          },
+        });
+
         load();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -603,19 +721,21 @@ export default function Licenses() {
     })();
   }, [isAdmin, toast, load]);
 
-  const onToggleSort = useCallback((key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-      return;
-    }
+  const onToggleSort = useCallback(
+    (key: SortKey) => {
+      if (sortKey === key) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return;
+      }
 
-    setSortKey(key);
-    setSortDir(
-      key === "product" || key === "vendor" || key === "type" ? "asc" : "desc"
-    );
-  }, [sortKey]);
+      setSortKey(key);
+      setSortDir(
+        key === "product" || key === "vendor" || key === "type" ? "asc" : "desc"
+      );
+    },
+    [sortKey]
+  );
 
-  // Inline seats edit handlers
   const beginSeatsEdit = useCallback((row: LicenseRow) => {
     setEditingSeatsId(row.id);
     setTmpUsed(safeNum(row.seats_used));
@@ -650,10 +770,17 @@ export default function Licenses() {
 
       try {
         await upsertLicense({ ...row, seats_used: used, seats_total: total });
+
+        setRegistryChanged(true);
+
         toast.push({
           tone: "success",
           title: "Updated",
-          message: `${row.product}: ${used}/${total}`,
+          message: `${row.product}: ${used}/${total}. Для обновления результатов запустите проверку.`,
+          action: {
+            label: "Запустить",
+            onClick: () => void runCheckAndOpen(),
+          },
         });
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -664,7 +791,6 @@ export default function Licenses() {
     [isAdmin, tmpUsed, tmpTotal, toast, load]
   );
 
-  // Row menu actions
   const openRowMenu = useCallback((row: LicenseRow, anchor: HTMLElement) => {
     menuAnchorRef.current = anchor;
     setMenuFor(row.id);
@@ -682,9 +808,9 @@ export default function Licenses() {
   if (err) {
     return (
       <Card className="p-5">
-        <div className="rounded-2xl border border-rose-400/15 bg-rose-500/10 px-4 py-3">
-          <div className="text-sm font-semibold text-rose-100">Ошибка</div>
-          <div className="mt-1 text-xs text-rose-200/80 break-words">{err}</div>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <div className="text-sm font-semibold text-red-700">Ошибка</div>
+          <div className="mt-1 break-words text-xs text-red-600">{err}</div>
           <div className="mt-3 flex gap-2">
             <Button variant="ghost" size="sm" onClick={load}>
               Обновить
@@ -714,7 +840,6 @@ export default function Licenses() {
 
   return (
     <div className={S.page}>
-      {/* CONFIRM */}
       <ConfirmDialog
         open={confirm.open}
         title={confirm.cfg.title}
@@ -734,7 +859,74 @@ export default function Licenses() {
         <ViewerNotice message="У вас нет прав на добавление, редактирование и удаление лицензий. Реестр доступен только для просмотра." />
       )}
 
-      {/* EDITOR */}
+      {isAdmin && registryChanged && (
+        <Card className="border-amber-200 bg-amber-50 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-amber-900">
+                Реестр лицензий изменён
+              </div>
+              <div className="mt-1 text-xs text-amber-700">
+                Чтобы Dashboard и результаты запусков учитывали новые данные, нужно запустить повторную проверку.
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={() => void runCheckAndOpen()}
+                disabled={runBusy}
+              >
+                <Play className="h-4 w-4" />
+                {runBusy ? "Запуск..." : "Запустить проверку"}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setRegistryChanged(false)}
+              >
+                Скрыть
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {searchParams.get("q") && (
+        <Card className="border-blue-200 bg-blue-50 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-blue-900">
+                Открыт реестр по продукту из результатов запуска
+              </div>
+              <div className="mt-1 text-xs text-blue-700">
+                Фильтр: <span className="font-semibold">{q}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearUrlSearch}
+              >
+                Сбросить фильтр
+              </Button>
+
+              <Button
+                size="sm"
+                onClick={() => void runCheckAndOpen()}
+                disabled={runBusy}
+              >
+                <ArrowUpRight className="h-4 w-4" />
+                {runBusy ? "Запуск..." : "Пересчитать"}
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {isAdmin && (
         <LicenseEditorDialog
           open={open}
@@ -757,8 +949,8 @@ export default function Licenses() {
         mode={mode}
         setMode={setMode}
         selectMode={isAdmin ? selectMode : false}
-        onStartSelectMode={isAdmin ? startSelectMode : () => { }}
-        onStopSelectMode={isAdmin ? stopSelectMode : () => { }}
+        onStartSelectMode={isAdmin ? startSelectMode : () => {}}
+        onStopSelectMode={isAdmin ? stopSelectMode : () => {}}
         density={density}
         setDensity={setDensity}
         showVendor={showVendor}
@@ -770,9 +962,9 @@ export default function Licenses() {
         sortKey={sortKey}
         sortDir={sortDir}
         onToggleSort={onToggleSort}
-        onSeedDemo={isAdmin ? seedDemo : () => { }}
+        onSeedDemo={isAdmin ? seedDemo : () => {}}
         onReload={load}
-        onOpenAdd={isAdmin ? openAdd : () => { }}
+        onOpenAdd={isAdmin ? openAdd : () => {}}
         bulkBar={bulkBarNode}
       />
 
@@ -786,8 +978,8 @@ export default function Licenses() {
         stickyHeader={settings.data.stickyHeader}
         disableEffectsWhileScroll={settings.perf.disableEffectsWhileScroll}
         allVisibleSelected={allVisibleSelected}
-        onToggleAllVisible={isAdmin ? toggleAllVisible : () => { }}
-        onToggleOne={isAdmin ? toggleOne : () => { }}
+        onToggleAllVisible={isAdmin ? toggleAllVisible : () => {}}
+        onToggleOne={isAdmin ? toggleOne : () => {}}
         showVendor={showVendor}
         showType={showType}
         showNote={showNote}
@@ -801,20 +993,32 @@ export default function Licenses() {
         tmpTotal={tmpTotal}
         setTmpUsed={setTmpUsed}
         setTmpTotal={setTmpTotal}
-        onBeginSeatsEdit={isAdmin ? beginSeatsEdit : () => { }}
-        onCancelSeatsEdit={isAdmin ? cancelSeatsEdit : () => { }}
-        onCommitSeatsEdit={isAdmin ? commitSeatsEdit : () => { }}
-        onOpenEditRow={isAdmin ? openEditRow : () => { }}
-        onOpenRowMenu={isAdmin ? openRowMenu : () => { }}
-        onSeedDemo={isAdmin ? seedDemo : () => { }}
-        onOpenAdd={isAdmin ? openAdd : () => { }}
+        onBeginSeatsEdit={isAdmin ? beginSeatsEdit : () => {}}
+        onCancelSeatsEdit={isAdmin ? cancelSeatsEdit : () => {}}
+        onCommitSeatsEdit={isAdmin ? commitSeatsEdit : () => {}}
+        onOpenEditRow={isAdmin ? openEditRow : () => {}}
+        onOpenRowMenu={isAdmin ? openRowMenu : () => {}}
+        onSeedDemo={isAdmin ? seedDemo : () => {}}
+        onOpenAdd={isAdmin ? openAdd : () => {}}
       />
 
-      <div className="flex items-center gap-2 text-[12px] text-white/45">
-        <AlertTriangle className="h-4 w-4 text-white/40" />
+      <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
+        <AlertTriangle className="h-4 w-4 text-slate-400" />
         {isAdmin
-          ? "Delete — удаляет только запись из local registry (не трогает реальные лицензии в системе)."
+          ? "Удаление меняет только реестр лицензий организации. Для обновления расчётов нужно запустить проверку."
           : "У вас режим только для чтения. Изменение реестра лицензий доступно только admin."}
+
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={() => void runCheckAndOpen()}
+            disabled={runBusy}
+            className="ml-auto inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            <Play className="h-4 w-4" />
+            {runBusy ? "Запуск..." : "Пересчитать результаты"}
+          </button>
+        )}
       </div>
 
       {isAdmin && (

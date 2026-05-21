@@ -1,13 +1,8 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { X, KeyRound, AlertTriangle } from "lucide-react";
 
-import { cn } from "../../cn/cn";
 import { Button } from "../../Button";
 import type { LicenseRow } from "../../../api";
-
-/* ------------------------------------------
- * Draft model
- * ------------------------------------------ */
 
 export type Draft = {
   id: string;
@@ -39,9 +34,9 @@ function expiresHint(expiresAt?: string) {
   const days = parseDateDays(expiresAt);
   if (days == null) return "";
   const d = Math.round(days);
-  if (d < 0) return `expired ${Math.abs(d)}d ago`;
-  if (d === 0) return "expires today";
-  return `in ${d}d`;
+  if (d < 0) return `истекла ${Math.abs(d)} дн. назад`;
+  if (d === 0) return "истекает сегодня";
+  return `через ${d} дн.`;
 }
 
 export function makeEmptyDraft(): Draft {
@@ -91,26 +86,22 @@ export function toRow(d: Draft): LicenseRow {
 }
 
 export function validateDraft(d: Draft): string | null {
-  if (!d.product.trim()) return "Product обязателен.";
-  if (safeNum(d.seats_total) < 0) return "seats_total не может быть отрицательным.";
-  if (safeNum(d.seats_used) < 0) return "seats_used не может быть отрицательным.";
-  if (d.starts_at && !/^\d{4}-\d{2}-\d{2}$/.test(d.starts_at)) return "starts_at должен быть YYYY-MM-DD.";
-  if (d.expires_at && !/^\d{4}-\d{2}-\d{2}$/.test(d.expires_at)) return "expires_at должен быть YYYY-MM-DD.";
+  if (!d.product.trim()) return "Название продукта обязательно.";
+  if (safeNum(d.seats_total) < 0) return "Общее количество мест не может быть отрицательным.";
+  if (safeNum(d.seats_used) < 0) return "Используемые места не могут быть отрицательными.";
+  if (d.starts_at && !/^\d{4}-\d{2}-\d{2}$/.test(d.starts_at)) return "Дата начала должна быть в формате YYYY-MM-DD.";
+  if (d.expires_at && !/^\d{4}-\d{2}-\d{2}$/.test(d.expires_at)) return "Дата окончания должна быть в формате YYYY-MM-DD.";
 
   if (d.starts_at && d.expires_at) {
     const s = Date.parse(d.starts_at);
     const e = Date.parse(d.expires_at);
     if (Number.isFinite(s) && Number.isFinite(e) && e < s) {
-      return "expires_at не может быть раньше starts_at.";
+      return "Дата окончания не может быть раньше даты начала.";
     }
   }
 
   return null;
 }
-
-/* ------------------------------------------
- * Modal helpers
- * ------------------------------------------ */
 
 function useLockBodyScroll(open: boolean) {
   useEffect(() => {
@@ -134,41 +125,26 @@ function useEsc(open: boolean, onClose: () => void) {
   }, [open, onClose]);
 }
 
-/* ------------------------------------------
- * Styles
- * ------------------------------------------ */
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="text-xs font-medium text-slate-500">{label}</div>
+      {hint && <div className="mt-0.5 text-xs text-slate-400">{hint}</div>}
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
 
-const S = {
-  overlay: "fixed inset-0 z-[300] bg-black/55 backdrop-blur-sm",
-  wrap: "fixed inset-0 z-[310] grid place-items-center p-4",
-  modal: cn(
-    "relative w-full max-w-[760px] rounded-3xl border border-white/[0.10] overflow-hidden",
-    "bg-gradient-to-b from-slate-950/80 via-slate-950/55 to-slate-950/35",
-    "shadow-[0_30px_140px_rgba(0,0,0,0.75)] backdrop-blur-xl"
-  ),
-  topLine:
-    "pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/25 to-transparent",
-  blob:
-    "pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-indigo-500/12 blur-3xl",
-  body: "relative p-5",
-  fieldCard: cn("rounded-3xl border border-white/[0.08] bg-white/[0.02] p-4"),
-  label: "text-sm font-semibold text-white/85",
-  hint: "text-[12px] text-white/45 mt-0.5",
-  input: cn(
-    "w-full rounded-2xl border px-3.5 py-2 text-sm",
-    "bg-white/[0.03] border-white/[0.08] text-white/85",
-    "outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
-  ),
-  textarea: cn(
-    "w-full min-h-[90px] rounded-2xl border p-3 text-[12px]",
-    "bg-black/20 border-white/[0.10] text-white/85",
-    "outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
-  ),
-};
-
-/* ------------------------------------------
- * Component
- * ------------------------------------------ */
+const inputClass =
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-600 focus:ring-2 focus:ring-slate-100";
 
 export function LicenseEditorDialog({
   open,
@@ -192,187 +168,212 @@ export function LicenseEditorDialog({
 
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  // close on outside click (but not inside modal)
   useEffect(() => {
     if (!open) return;
+
     const onDown = (e: PointerEvent) => {
       const root = rootRef.current;
       if (!root) return;
       if (e.target instanceof Node && root.contains(e.target)) return;
       onClose();
     };
+
     window.addEventListener("pointerdown", onDown, { capture: true });
-    return () => window.removeEventListener("pointerdown", onDown, { capture: true } as any);
+    return () =>
+      window.removeEventListener("pointerdown", onDown, { capture: true } as any);
   }, [open, onClose]);
 
-  const expiresInfo = useMemo(() => expiresHint(draft.expires_at), [draft.expires_at]);
+  const expiresInfo = useMemo(
+    () => expiresHint(draft.expires_at),
+    [draft.expires_at]
+  );
 
   if (!open) return null;
 
   return (
     <>
-      <div className={S.overlay} aria-hidden />
-      <div className={S.wrap} role="dialog" aria-modal="true">
-        <div ref={rootRef} className={S.modal}>
-          <div className={S.topLine} />
-          <div className={S.blob} />
+      <div className="fixed inset-0 z-[300] bg-slate-950/45 backdrop-blur-[2px]" aria-hidden />
 
-          <div className={S.body}>
-            <div className="flex items-start gap-3">
-              <div
-                className={cn(
-                  "h-11 w-11 rounded-2xl border border-white/[0.10] bg-white/[0.04] grid place-items-center",
-                  "shadow-[0_18px_70px_rgba(34,211,238,0.08)]"
-                )}
-              >
-                <KeyRound className="h-5 w-5 text-cyan-200/85" />
+      <div className="fixed inset-0 z-[310] grid place-items-center p-4" role="dialog" aria-modal="true">
+        <div
+          ref={rootRef}
+          className="relative w-full max-w-[760px] overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.24)]"
+        >
+          <div className="flex items-start gap-4 border-b border-slate-200 px-5 py-4">
+            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600">
+              <KeyRound className="h-5 w-5" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                {isEdit ? "Редактирование" : "Добавление"}
               </div>
 
-              <div className="min-w-0 flex-1">
-                <div className="text-xs text-white/50 tracking-wide">{isEdit ? "Edit" : "Add"}</div>
-                <div className="mt-1 text-xl font-semibold tracking-tight text-white/90">License entry</div>
-                <div className="mt-1 text-sm text-white/55">
-                  Заполни продукт, тип, seats и даты. Всё хранится локально.
+              <div className="mt-1 text-xl font-semibold text-slate-950">
+                Запись реестра лицензий
+              </div>
+
+              <div className="mt-1 text-sm leading-6 text-slate-600">
+                Заполните продукт, тип лицензии, количество мест и сроки действия.
+              </div>
+            </div>
+
+            <button
+              className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-950"
+              onClick={onClose}
+              title="Закрыть"
+              type="button"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="max-h-[calc(100vh-140px)] overflow-y-auto bg-slate-100 p-5">
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Field label="Продукт" hint="Название программного продукта">
+                  <input
+                    value={draft.product}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, product: e.target.value }))
+                    }
+                    className={inputClass}
+                    placeholder="JetBrains All Products Pack"
+                  />
+                </Field>
+
+                <Field label="Производитель">
+                  <input
+                    value={draft.vendor}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, vendor: e.target.value }))
+                    }
+                    className={inputClass}
+                    placeholder="JetBrains"
+                  />
+                </Field>
+
+                <Field label="Коммерческий тип" hint="subscription / perpetual / trial">
+                  <select
+                    value={draft.license_type}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        license_type: e.target.value as any,
+                      }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="subscription">subscription</option>
+                    <option value="perpetual">perpetual</option>
+                    <option value="trial">trial</option>
+                  </select>
+                </Field>
+
+                <Field
+                  label="Тип назначения"
+                  hint="Как считать потребность: per_install / per_user / concurrent"
+                >
+                  <select
+                    value={draft.assignment_type}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        assignment_type:
+                          e.target.value as LicenseRow["assignment_type"],
+                      }))
+                    }
+                    className={inputClass}
+                  >
+                    <option value="per_install">per_install</option>
+                    <option value="per_user">per_user</option>
+                    <option value="concurrent">concurrent</option>
+                  </select>
+                </Field>
+
+                <Field label="Места" hint="Использовано / всего">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      value={draft.seats_used}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          seats_used: safeNum(e.target.value),
+                        }))
+                      }
+                      className={inputClass}
+                      placeholder="Использовано"
+                    />
+
+                    <input
+                      type="number"
+                      value={draft.seats_total}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          seats_total: safeNum(e.target.value),
+                        }))
+                      }
+                      className={inputClass}
+                      placeholder="Всего"
+                    />
+                  </div>
+                </Field>
+
+                <Field label="Дата начала" hint="YYYY-MM-DD">
+                  <input
+                    value={draft.starts_at}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, starts_at: e.target.value }))
+                    }
+                    className={inputClass}
+                    placeholder="2026-01-04"
+                  />
+                </Field>
+
+                <Field
+                  label="Дата окончания"
+                  hint={`YYYY-MM-DD${expiresInfo ? ` · ${expiresInfo}` : ""}`}
+                >
+                  <input
+                    value={draft.expires_at}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, expires_at: e.target.value }))
+                    }
+                    className={inputClass}
+                    placeholder="2026-02-01"
+                  />
+                </Field>
+
+                <div className="md:col-span-2">
+                  <Field label="Примечание" hint="Пояснение риска или комментарий администратора">
+                    <textarea
+                      value={draft.note}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, note: e.target.value }))
+                      }
+                      className="min-h-[90px] w-full rounded-lg border border-slate-300 bg-white p-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-600 focus:ring-2 focus:ring-slate-100"
+                      placeholder="Например: дефицит мест — докупить 5 лицензий, срок истекает через 10 дней."
+                    />
+                  </Field>
                 </div>
               </div>
-
-              <button
-                className={cn(
-                  "h-10 w-10 rounded-2xl border border-white/[0.08] bg-white/[0.03]",
-                  "hover:bg-white/[0.06] transition grid place-items-center"
-                )}
-                onClick={onClose}
-                title="Close"
-                type="button"
-              >
-                <X className="h-5 w-5 text-white/70" />
-              </button>
             </div>
 
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className={S.fieldCard}>
-                <div className={S.label}>Product *</div>
-                <div className={S.hint}>Название ПО / продукта</div>
-                <input
-                  value={draft.product}
-                  onChange={(e) => setDraft((d) => ({ ...d, product: e.target.value }))}
-                  className={cn(S.input, "mt-2")}
-                  placeholder="JetBrains All Products Pack"
-                />
-              </div>
-
-              <div className={S.fieldCard}>
-                <div className={S.label}>Vendor</div>
-                <div className={S.hint}>Производитель</div>
-                <input
-                  value={draft.vendor}
-                  onChange={(e) => setDraft((d) => ({ ...d, vendor: e.target.value }))}
-                  className={cn(S.input, "mt-2")}
-                  placeholder="JetBrains"
-                />
-              </div>
-
-              <div className={S.fieldCard}>
-                <div className={S.label}>Commercial type</div>
-                <div className={S.hint}>perpetual / subscription / trial</div>
-                <select
-                  value={draft.license_type}
-                  onChange={(e) => setDraft((d) => ({ ...d, license_type: e.target.value as any }))}
-                  className={cn(S.input, "mt-2")}
-                >
-                  <option value="subscription">subscription</option>
-                  <option value="perpetual">perpetual</option>
-                  <option value="trial">trial</option>
-                </select>
-              </div>
-
-              <div className={S.fieldCard}>
-                <div className={S.label}>Compliance type</div>
-                <div className={S.hint}>Как считать demand в проверках: per_install / per_user / concurrent</div>
-                <select
-                  value={draft.assignment_type}
-                  onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      assignment_type: e.target.value as LicenseRow["assignment_type"],
-                    }))
-                  }
-                  className={cn(S.input, "mt-2")}
-                >
-                  <option value="per_install">per_install</option>
-                  <option value="per_user">per_user</option>
-                  <option value="concurrent">concurrent</option>
-                </select>
-              </div>
-
-              <div className={S.fieldCard}>
-                <div className={S.label}>Seats</div>
-                <div className={S.hint}>used / total</div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    value={draft.seats_used}
-                    onChange={(e) => setDraft((d) => ({ ...d, seats_used: safeNum(e.target.value) }))}
-                    className={S.input}
-                    placeholder="used"
-                  />
-                  <input
-                    type="number"
-                    value={draft.seats_total}
-                    onChange={(e) => setDraft((d) => ({ ...d, seats_total: safeNum(e.target.value) }))}
-                    className={S.input}
-                    placeholder="total"
-                  />
-                </div>
-              </div>
-
-              <div className={S.fieldCard}>
-                <div className={S.label}>Starts at</div>
-                <div className={S.hint}>YYYY-MM-DD (optional)</div>
-                <input
-                  value={draft.starts_at}
-                  onChange={(e) => setDraft((d) => ({ ...d, starts_at: e.target.value }))}
-                  className={cn(S.input, "mt-2")}
-                  placeholder="2026-01-04"
-                />
-              </div>
-
-              <div className={S.fieldCard}>
-                <div className={S.label}>Expires at</div>
-                <div className={S.hint}>YYYY-MM-DD (optional){expiresInfo ? ` • ${expiresInfo}` : ""}</div>
-                <input
-                  value={draft.expires_at}
-                  onChange={(e) => setDraft((d) => ({ ...d, expires_at: e.target.value }))}
-                  className={cn(S.input, "mt-2")}
-                  placeholder="2026-02-01"
-                />
-              </div>
-            </div>
-
-            <div className={cn(S.fieldCard, "mt-3")}>
-              <div className={S.label}>Note</div>
-              <div className={S.hint}>Любые пояснения (почему риск / что делать)</div>
-              <textarea
-                value={draft.note}
-                onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))}
-                className={cn(S.textarea, "mt-2")}
-                placeholder="Например: дефицит seats — докупить 5 лицензий, срок истекает через 10 дней."
-              />
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-[12px] text-white/45">
-                <AlertTriangle className="h-4 w-4 text-white/40" />
-                Product обязателен. Compliance type влияет на расчёт demand в проверках. Даты — YYYY-MM-DD. Expires ≥ Starts.
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <AlertTriangle className="h-4 w-4 text-slate-400" />
+                Продукт обязателен. Даты — YYYY-MM-DD. Дата окончания не раньше даты начала.
               </div>
 
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
-                  Cancel
+                  Отмена
                 </Button>
 
-                <Button variant="primary" size="sm" onClick={onSave} disabled={saving}>
-                  {saving ? "Saving…" : "Save"}
+                <Button size="sm" onClick={onSave} disabled={saving}>
+                  {saving ? "Сохранение..." : "Сохранить"}
                 </Button>
               </div>
             </div>

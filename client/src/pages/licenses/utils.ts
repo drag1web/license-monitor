@@ -60,10 +60,36 @@ export function formatExpires(expiresAt?: string | null): ExpiresFmt {
   if (days == null) return { text: expiresAt, hint: "", tone: "ok" };
 
   const d = Math.round(days);
-  if (d < 0) return { text: expiresAt, hint: `expired ${Math.abs(d)}d ago`, tone: "bad" };
-  if (d === 0) return { text: expiresAt, hint: "expires today", tone: "warn" };
-  if (d <= 14) return { text: expiresAt, hint: `in ${d}d`, tone: "warn" };
-  return { text: expiresAt, hint: `in ${d}d`, tone: "ok" };
+
+  if (d < 0) {
+    return {
+      text: expiresAt,
+      hint: `истекла ${Math.abs(d)} дн. назад`,
+      tone: "bad",
+    };
+  }
+
+  if (d === 0) {
+    return {
+      text: expiresAt,
+      hint: "истекает сегодня",
+      tone: "warn",
+    };
+  }
+
+  if (d <= 14) {
+    return {
+      text: expiresAt,
+      hint: `через ${d} дн.`,
+      tone: "warn",
+    };
+  }
+
+  return {
+    text: expiresAt,
+    hint: `через ${d} дн.`,
+    tone: "ok",
+  };
 }
 
 function sortValue(x: LicenseRow, key: SortKey) {

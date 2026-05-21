@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
   CheckCheck,
-  CircleAlert,
   ShieldAlert,
   TriangleAlert,
+  CircleAlert,
   ArrowUpRight,
   Info,
   Trash2,
@@ -44,22 +44,24 @@ function toneOf(a: AlertRow): "critical" | "warn" | "info" {
   return "info";
 }
 
+function severityLabel(a: AlertRow) {
+  if (a.severity === "critical") return "Критично";
+  if (a.severity === "warn") return "Предупреждение";
+  return "Информация";
+}
+
 function iconForAlert(a: AlertRow) {
   const tone = toneOf(a);
 
   if (tone === "critical") {
-    return <ShieldAlert className="h-4 w-4 text-rose-300" />;
+    return <ShieldAlert className="h-4 w-4 text-red-600" />;
   }
-  if (tone === "warn") {
-    return <TriangleAlert className="h-4 w-4 text-amber-300" />;
-  }
-  return <CircleAlert className="h-4 w-4 text-cyan-300" />;
-}
 
-function severityLabel(a: AlertRow) {
-  if (a.severity === "critical") return "critical";
-  if (a.severity === "warn") return "warning";
-  return "info";
+  if (tone === "warn") {
+    return <TriangleAlert className="h-4 w-4 text-amber-600" />;
+  }
+
+  return <CircleAlert className="h-4 w-4 text-slate-600" />;
 }
 
 function toneClasses(a: AlertRow) {
@@ -68,32 +70,32 @@ function toneClasses(a: AlertRow) {
   if (tone === "critical") {
     return {
       card: a.is_read
-        ? "border-rose-500/15 bg-rose-500/[0.035]"
-        : "border-rose-400/20 bg-rose-500/[0.07]",
-      badge: "border border-rose-400/18 bg-rose-500/12 text-rose-200",
-      glow: "shadow-[0_12px_32px_rgba(244,63,94,0.10)]",
-      dot: "bg-rose-300 shadow-[0_0_14px_rgba(251,113,133,0.75)]",
+        ? "border-red-200 bg-red-50/40"
+        : "border-red-300 bg-red-50",
+      badge: "border-red-200 bg-red-50 text-red-700",
+      icon: "border-red-200 bg-red-50",
+      dot: "bg-red-500",
     };
   }
 
   if (tone === "warn") {
     return {
       card: a.is_read
-        ? "border-amber-500/15 bg-amber-500/[0.03]"
-        : "border-amber-400/18 bg-amber-500/[0.06]",
-      badge: "border border-amber-400/18 bg-amber-500/12 text-amber-200",
-      glow: "shadow-[0_12px_32px_rgba(245,158,11,0.10)]",
-      dot: "bg-amber-300 shadow-[0_0_14px_rgba(252,211,77,0.75)]",
+        ? "border-amber-200 bg-amber-50/40"
+        : "border-amber-300 bg-amber-50",
+      badge: "border-amber-200 bg-amber-50 text-amber-700",
+      icon: "border-amber-200 bg-amber-50",
+      dot: "bg-amber-500",
     };
   }
 
   return {
     card: a.is_read
-      ? "border-cyan-500/15 bg-cyan-500/[0.025]"
-      : "border-cyan-400/18 bg-cyan-500/[0.055]",
-    badge: "border border-cyan-400/18 bg-cyan-500/12 text-cyan-200",
-    glow: "shadow-[0_12px_32px_rgba(34,211,238,0.09)]",
-    dot: "bg-cyan-300 shadow-[0_0_14px_rgba(34,211,238,0.75)]",
+      ? "border-slate-200 bg-white"
+      : "border-blue-200 bg-blue-50/60",
+    badge: "border-slate-200 bg-slate-50 text-slate-700",
+    icon: "border-slate-200 bg-slate-50",
+    dot: "bg-blue-500",
   };
 }
 
@@ -113,10 +115,10 @@ function HeaderButton(props: {
       disabled={disabled}
       title={title}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-2xl border px-2.5 py-1.5 text-[11px] font-semibold transition active:scale-[0.98]",
+        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition",
         danger
-          ? "border-rose-400/15 bg-rose-500/8 text-rose-200 hover:bg-rose-500/14"
-          : "border-white/[0.08] bg-white/[0.04] text-white/80 hover:bg-white/[0.08] hover:border-white/[0.14]",
+          ? "border-red-200 bg-white text-red-600 hover:bg-red-50"
+          : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
         "disabled:cursor-not-allowed disabled:opacity-45"
       )}
     >
@@ -138,12 +140,12 @@ function TabButton(props: {
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-2xl border px-3 py-1.5 text-[11px] font-semibold transition",
+        "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
         active
           ? tone === "critical"
-            ? "border-rose-400/18 bg-rose-500/14 text-rose-200"
-            : "border-cyan-400/18 bg-cyan-500/14 text-cyan-200"
-          : "border-white/[0.08] bg-white/[0.04] text-white/65 hover:bg-white/[0.08]"
+            ? "border-red-300 bg-red-50 text-red-700"
+            : "border-slate-900 bg-slate-900 text-white"
+          : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
       )}
     >
       {children}
@@ -238,7 +240,6 @@ export function AlertsBell() {
   async function onReadAll() {
     try {
       await readAllAlerts();
-
       const now = new Date().toISOString();
 
       setItems((prev) =>
@@ -317,9 +318,7 @@ export function AlertsBell() {
     }
 
     function onEsc(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setOpen(false);
-      }
+      if (e.key === "Escape") setOpen(false);
     }
 
     if (open) {
@@ -333,7 +332,11 @@ export function AlertsBell() {
     };
   }, [open]);
 
-  const unreadItems = useMemo(() => items.filter((x) => x.is_read === 0).length, [items]);
+  const unreadItems = useMemo(
+    () => items.filter((x) => x.is_read === 0).length,
+    [items]
+  );
+
   const criticalItems = useMemo(
     () => items.filter((x) => x.severity === "critical").length,
     [items]
@@ -355,57 +358,22 @@ export function AlertsBell() {
         onClick={() => {
           setOpen((v) => {
             const next = !v;
-            if (next) {
-              refresh(true);
-            } else {
-              setTab("all");
-            }
+            if (next) refresh(true);
+            else setTab("all");
             return next;
           });
         }}
-        title="Alerts"
+        title="Уведомления"
         animate={
           unread > 0
-            ? {
-                boxShadow: [
-                  "0 10px 30px rgba(0,0,0,0.35)",
-                  "0 10px 30px rgba(0,0,0,0.35), 0 0 0 6px rgba(244,63,94,0.10)",
-                  "0 10px 30px rgba(0,0,0,0.35)",
-                ],
-                y: [0, -1, 0],
-                rotate: bellShakeKey > 0 ? [0, -9, 7, -5, 3, -1, 0] : 0,
-              }
-            : {
-                boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
-                y: 0,
-                rotate: 0,
-              }
+            ? { y: [0, -1, 0], rotate: bellShakeKey > 0 ? [0, -8, 6, -3, 0] : 0 }
+            : { y: 0, rotate: 0 }
         }
-        transition={
-          unread > 0
-            ? {
-                boxShadow: {
-                  duration: 1.8,
-                  repeat: Infinity,
-                  repeatDelay: 1.15,
-                },
-                y: {
-                  duration: 1.8,
-                  repeat: Infinity,
-                  repeatDelay: 1.15,
-                },
-                rotate: {
-                  duration: 0.48,
-                },
-              }
-            : { duration: 0.2 }
-        }
+        transition={unread > 0 ? { duration: 0.45 } : { duration: 0.2 }}
         className={cn(
-          "relative grid h-9 w-9 place-items-center rounded-2xl border",
-          "border-white/[0.08] bg-white/[0.04]",
-          "text-white/80",
-          "transition hover:-translate-y-[1px] hover:bg-white/[0.08] hover:border-white/[0.14]",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/30"
+          "relative grid h-9 w-9 place-items-center rounded-lg border border-slate-300 bg-white text-slate-600 shadow-sm",
+          "transition hover:bg-slate-50 hover:text-slate-950",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
         )}
       >
         <Bell className="h-4 w-4" />
@@ -415,14 +383,10 @@ export function AlertsBell() {
             <motion.span
               key={unread}
               initial={{ scale: 0.72, opacity: 0 }}
-              animate={{ scale: [0.9, 1.18, 1], opacity: 1 }}
+              animate={{ scale: [0.9, 1.15, 1], opacity: 1 }}
               exit={{ scale: 0.72, opacity: 0 }}
-              transition={{ duration: 0.35 }}
-              className={cn(
-                "absolute -right-1 -top-1 min-w-[18px] rounded-full px-1.5 py-0.5",
-                "bg-rose-500 text-[10px] font-bold leading-none text-white",
-                "shadow-[0_8px_20px_rgba(244,63,94,0.45)]"
-              )}
+              transition={{ duration: 0.25 }}
+              className="absolute -right-1 -top-1 min-w-[18px] rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow"
             >
               {unread > 99 ? "99+" : unread}
             </motion.span>
@@ -432,28 +396,29 @@ export function AlertsBell() {
 
       <div
         className={cn(
-          "absolute right-0 top-11 z-[80] w-[404px] origin-top-right overflow-hidden rounded-3xl border",
-          "border-white/[0.10] bg-slate-950/92 backdrop-blur-2xl",
-          "shadow-[0_24px_80px_rgba(0,0,0,0.55)]",
-          "transition-all duration-200 ease-out",
+          "absolute right-0 top-11 z-[80] w-[420px] origin-top-right overflow-hidden rounded-xl border border-slate-300 bg-white shadow-[0_12px_38px_rgba(15,23,42,0.18)]",
+          "transition-all duration-150 ease-out",
           open
             ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
             : "pointer-events-none -translate-y-2 scale-[0.98] opacity-0"
         )}
       >
-        <div className="border-b border-white/10 px-4 py-3">
+        <div className="border-b border-slate-200 px-4 py-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <div className="text-sm font-semibold text-white/90">Уведомления</div>
+                <div className="text-sm font-semibold text-slate-950">
+                  Уведомления
+                </div>
+
                 {unread > 0 && (
-                  <span className="rounded-xl bg-rose-500/12 px-2 py-0.5 text-[11px] font-semibold text-rose-200">
+                  <span className="rounded-md bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">
                     {unread}
                   </span>
                 )}
               </div>
 
-              <div className="mt-1 text-[11px] text-white/45">
+              <div className="mt-1 text-xs text-slate-500">
                 Всего: {items.length} · Непрочитанных: {unreadItems}
               </div>
             </div>
@@ -461,11 +426,7 @@ export function AlertsBell() {
             <Link
               to="/alerts"
               onClick={() => setOpen(false)}
-              className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-2xl border px-2.5 py-1.5 text-[11px] font-semibold transition",
-                "border-white/[0.08] bg-white/[0.04] text-cyan-200",
-                "hover:bg-white/[0.08] hover:border-white/[0.14]"
-              )}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
             >
               Все
               <ArrowUpRight className="h-3.5 w-3.5" />
@@ -474,13 +435,13 @@ export function AlertsBell() {
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <TabButton active={tab === "all"} onClick={() => setTab("all")}>
-              All
+              Все
             </TabButton>
 
             <TabButton active={tab === "unread"} onClick={() => setTab("unread")}>
-              Unread
+              Непрочитанные
               {unreadItems > 0 && (
-                <span className="ml-1.5 text-[10px] text-cyan-300/85">{unreadItems}</span>
+                <span className="ml-1.5 text-[10px]">{unreadItems}</span>
               )}
             </TabButton>
 
@@ -489,53 +450,48 @@ export function AlertsBell() {
               onClick={() => setTab("critical")}
               tone="critical"
             >
-              Critical
+              Критичные
               {criticalItems > 0 && (
-                <span className="ml-1.5 text-[10px] text-rose-300/85">{criticalItems}</span>
+                <span className="ml-1.5 text-[10px]">{criticalItems}</span>
               )}
             </TabButton>
+          </div>
 
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <HeaderButton
-                onClick={onReadAll}
-                disabled={items.length === 0 || unread === 0}
-                title="Отметить все как прочитанные"
-              >
-                <CheckCheck className="h-3.5 w-3.5" />
-                Прочитать
-              </HeaderButton>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <HeaderButton
+              onClick={onReadAll}
+              disabled={items.length === 0 || unread === 0}
+              title="Отметить все как прочитанные"
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              Прочитать все
+            </HeaderButton>
 
-              <HeaderButton
-                onClick={onDeleteRead}
-                disabled={items.length === 0 || items.every((x) => x.is_read === 0)}
-                danger
-                title="Удалить все прочитанные"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Очистить
-              </HeaderButton>
-            </div>
+            <HeaderButton
+              onClick={onDeleteRead}
+              disabled={items.length === 0 || items.every((x) => x.is_read === 0)}
+              danger
+              title="Удалить все прочитанные"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Очистить
+            </HeaderButton>
           </div>
         </div>
 
-        <div className="max-h-[440px] overflow-y-auto p-3">
+        <div className="max-h-[440px] overflow-y-auto bg-slate-50 p-3">
           {loading ? (
-            <div className="flex items-center gap-2 px-2 py-8 text-sm text-white/45">
+            <div className="flex items-center gap-2 px-2 py-8 text-sm text-slate-500">
               <Info className="h-4 w-4" />
               Загрузка уведомлений...
             </div>
           ) : filteredItems.length === 0 ? (
-            <div
-              className={cn(
-                "rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-8 text-center",
-                "shadow-[0_12px_30px_rgba(0,0,0,0.24)]"
-              )}
-            >
-              <div className="mx-auto grid h-11 w-11 place-items-center rounded-2xl bg-white/[0.04]">
-                <Bell className="h-5 w-5 text-white/40" />
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-8 text-center">
+              <div className="mx-auto grid h-11 w-11 place-items-center rounded-lg bg-slate-100">
+                <Bell className="h-5 w-5 text-slate-400" />
               </div>
 
-              <div className="mt-3 text-sm font-semibold text-white/80">
+              <div className="mt-3 text-sm font-semibold text-slate-900">
                 {tab === "all"
                   ? "Пока нет уведомлений"
                   : tab === "unread"
@@ -543,7 +499,7 @@ export function AlertsBell() {
                     : "Нет критичных уведомлений"}
               </div>
 
-              <div className="mt-1 text-xs text-white/45">
+              <div className="mt-1 text-xs text-slate-500">
                 {tab === "all"
                   ? "Когда появятся дефициты, истечения или ошибки — они будут здесь."
                   : tab === "unread"
@@ -552,19 +508,7 @@ export function AlertsBell() {
               </div>
             </div>
           ) : (
-            <motion.div
-              className="space-y-2.5"
-              initial="hidden"
-              animate="show"
-              variants={{
-                hidden: {},
-                show: {
-                  transition: {
-                    staggerChildren: 0.045,
-                  },
-                },
-              }}
-            >
+            <motion.div className="space-y-2.5">
               <AnimatePresence initial={false}>
                 {filteredItems.map((a) => {
                   const tone = toneClasses(a);
@@ -574,28 +518,25 @@ export function AlertsBell() {
                     <motion.div
                       key={a.id}
                       layout
-                      initial={{ opacity: 0, y: 10, scale: 0.985 }}
+                      initial={{ opacity: 0, y: 8 }}
                       animate={{
                         opacity: 1,
                         y: 0,
-                        scale: isHighlighted ? [1, 1.012, 1] : 1,
+                        scale: isHighlighted ? [1, 1.01, 1] : 1,
                       }}
-                      exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                      transition={{ duration: 0.22, ease: "easeOut" }}
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.18 }}
                       className={cn(
-                        "group rounded-2xl border p-3 transition",
-                        "hover:-translate-y-[1px] hover:border-white/[0.16]",
+                        "group rounded-xl border p-3 transition hover:border-slate-300 hover:bg-white",
                         tone.card,
-                        tone.glow,
-                        isHighlighted &&
-                          "ring-2 ring-cyan-300/30 shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_18px_44px_rgba(34,211,238,0.12)]"
+                        isHighlighted && "ring-2 ring-blue-200"
                       )}
                     >
                       <div className="flex items-start gap-3">
                         <div
                           className={cn(
-                            "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-2xl",
-                            "border border-white/[0.06] bg-white/[0.045]"
+                            "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg border",
+                            tone.icon
                           )}
                         >
                           {iconForAlert(a)}
@@ -605,13 +546,13 @@ export function AlertsBell() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
-                                <div className="truncate text-sm font-semibold text-white/90">
+                                <div className="truncate text-sm font-semibold text-slate-950">
                                   {a.title}
                                 </div>
 
                                 <span
                                   className={cn(
-                                    "rounded-xl px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                                    "rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
                                     tone.badge
                                   )}
                                 >
@@ -619,7 +560,7 @@ export function AlertsBell() {
                                 </span>
                               </div>
 
-                              <div className="mt-1 text-xs leading-relaxed text-white/60">
+                              <div className="mt-1 text-xs leading-relaxed text-slate-600">
                                 {a.message}
                               </div>
                             </div>
@@ -641,11 +582,7 @@ export function AlertsBell() {
                                 type="button"
                                 onClick={() => onDelete(a.id)}
                                 title="Удалить уведомление"
-                                className={cn(
-                                  "grid h-7 w-7 place-items-center rounded-xl border",
-                                  "border-white/[0.08] bg-white/[0.04] text-white/45",
-                                  "transition hover:bg-rose-500/12 hover:border-rose-400/18 hover:text-rose-200"
-                                )}
+                                className="grid h-7 w-7 place-items-center rounded-lg border border-slate-200 bg-white text-slate-400 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600"
                               >
                                 <X className="h-3.5 w-3.5" />
                               </button>
@@ -653,9 +590,9 @@ export function AlertsBell() {
                           </div>
 
                           <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                            <div className="text-[11px] text-white/38">
+                            <div className="text-xs text-slate-500">
                               {formatWhen(a.created_at)}
-                              {a.run_id ? ` · run #${a.run_id}` : ""}
+                              {a.run_id ? ` · запуск #${a.run_id}` : ""}
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2">
@@ -663,11 +600,7 @@ export function AlertsBell() {
                                 <Link
                                   to={`/runs/${a.run_id}`}
                                   onClick={() => setOpen(false)}
-                                  className={cn(
-                                    "inline-flex items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-[11px] font-semibold",
-                                    "border-white/[0.08] bg-white/[0.04] text-cyan-200",
-                                    "transition hover:bg-white/[0.08] hover:border-white/[0.14]"
-                                  )}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
                                 >
                                   Открыть
                                   <ArrowUpRight className="h-3.5 w-3.5" />
@@ -678,16 +611,14 @@ export function AlertsBell() {
                                 <button
                                   type="button"
                                   onClick={() => onRead(a.id)}
-                                  className={cn(
-                                    "rounded-2xl border px-3 py-1.5 text-[11px] font-semibold",
-                                    "border-white/[0.08] bg-white/[0.04] text-white/80",
-                                    "transition hover:bg-white/[0.08] hover:border-white/[0.14]"
-                                  )}
+                                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
                                 >
                                   Прочитать
                                 </button>
                               ) : (
-                                <span className="text-[11px] text-white/32">Прочитано</span>
+                                <span className="text-xs text-slate-400">
+                                  Прочитано
+                                </span>
                               )}
                             </div>
                           </div>

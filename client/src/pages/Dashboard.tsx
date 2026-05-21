@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   download,
   getRuns,
   runCheck,
-  getRunResults,
   type RunRow,
 } from "../api";
 
-import { computeRunDiff, diffScore } from "../ui/diff/runDiff";
 import { Card } from "../ui/Card";
 import { cn } from "../ui/cn/cn";
 import { useToast } from "../ui/toast";
@@ -25,7 +23,7 @@ import {
   TBody,
   Tr,
   Td,
-  SortTh,
+  Th,
 } from "../ui/Table";
 
 import {
@@ -36,64 +34,26 @@ import {
   Download as DownloadIcon,
   TriangleAlert,
   CircleCheck,
-  Copy,
   Clock,
   ArrowUpRight,
   ShieldCheck,
   Zap,
   Layers,
   TimerReset,
-  FolderOutput,
-  Activity,
-  Sparkles,
-  ChevronRight,
+  Upload,
+  GitBranch,
+  Database,
+  KeyRound,
+  ListChecks,
+  FileWarning,
+  ClipboardList,
 } from "lucide-react";
 
-/* ------------------------------------------
- * Table sorting
- * ------------------------------------------ */
-
-type SortKey =
-  | "id"
-  | "run_at"
-  | "total_products"
-  | "deficit_products"
-  | "expiring_products"
-  | "unmatched_installs";
-
-type SortDir = "asc" | "desc" | null;
-
-function nextDir(d: SortDir): SortDir {
-  if (d === null) return "asc";
-  if (d === "asc") return "desc";
-  return null;
-}
+type Tone = "ok" | "warn" | "bad" | "none";
 
 function safeNum(v: unknown) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-}
-
-function getVal(r: RunRow, k: SortKey): unknown {
-  return (r as unknown as Record<string, unknown>)[k];
-}
-
-function cmpBy(key: SortKey, dir: Exclude<SortDir, null>) {
-  const mul = dir === "asc" ? 1 : -1;
-
-  return (a: RunRow, b: RunRow) => {
-    const av = getVal(a, key);
-    const bv = getVal(b, key);
-
-    if (key === "run_at") {
-      const at = Date.parse(String(av));
-      const bt = Date.parse(String(bv));
-      if (Number.isFinite(at) && Number.isFinite(bt)) return (at - bt) * mul;
-      return String(av).localeCompare(String(bv)) * mul;
-    }
-
-    return (safeNum(av) - safeNum(bv)) * mul;
-  };
 }
 
 function formatInt(n: unknown) {
@@ -105,27 +65,12 @@ function formatInt(n: unknown) {
   }
 }
 
-function formatDelta(delta: number) {
-  const sign = delta > 0 ? "+" : "";
-  return `${sign}${formatInt(delta)}`;
-}
-
-function clamp(n: number, a: number, b: number) {
-  return Math.max(a, Math.min(b, n));
-}
-
-/* ------------------------------------------
- * Severity / tone
- * ------------------------------------------ */
-
-type Tone = "ok" | "warn" | "bad" | "none";
-
 function severityFrom(last?: RunRow): Tone {
   if (!last) return "none";
 
-  const deficit = safeNum(last?.deficit_products);
-  const expiring = safeNum(last?.expiring_products);
-  const unmatched = safeNum(last?.unmatched_installs);
+  const deficit = safeNum(last.deficit_products);
+  const expiring = safeNum(last.expiring_products);
+  const unmatched = safeNum(last.unmatched_installs);
 
   if (deficit > 0) return "bad";
   if (expiring > 0 || unmatched > 0) return "warn";
@@ -139,101 +84,45 @@ function iconForTone(kind: Tone) {
   return <Clock className="h-4 w-4" />;
 }
 
-function glowClasses(kind: Tone) {
-  switch (kind) {
-    case "ok":
-      return "shadow-[0_18px_70px_rgba(16,185,129,0.10)]";
-    case "warn":
-      return "shadow-[0_18px_70px_rgba(245,158,11,0.10)]";
-    case "bad":
-      return "shadow-[0_18px_70px_rgba(244,63,94,0.12)]";
-    default:
-      return "shadow-[0_18px_70px_rgba(34,211,238,0.08)]";
-  }
+const PANEL =
+  "rounded-xl border border-slate-300 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.08)]";
+
+function toneLeftBorder(kind: Tone) {
+  if (kind === "ok") return "border-l-4 border-l-emerald-500";
+  if (kind === "warn") return "border-l-4 border-l-amber-500";
+  if (kind === "bad") return "border-l-4 border-l-red-500";
+  return "border-l-4 border-l-slate-300";
 }
 
-/* ------------------------------------------
- * Shared visual tokens (local)
- * ------------------------------------------ */
-
-const SOFT_BORDER = "border-[rgba(100,130,170,0.18)]";
-const SOFT_BORDER_HOVER = "hover:border-[rgba(120,155,205,0.28)]";
-const SOFT_BORDER_STRONG = "border-[rgba(120,155,205,0.24)]";
-
-const GLASS_BG = "bg-[rgba(var(--card),0.26)]";
-const GLASS_BG_SOFT = "bg-[rgba(var(--card),0.18)]";
-const GLASS_BG_STRONG =
-  "bg-[linear-gradient(to_bottom,rgba(var(--card),0.46),rgba(var(--card),0.22))]";
-
-const SOFT_SHADOW = "shadow-[0_14px_38px_rgba(0,0,0,0.24)]";
-const CARD_SHADOW = "shadow-[0_24px_80px_rgba(0,0,0,0.36)]";
-
-/* ------------------------------------------
- * UI atoms
- * ------------------------------------------ */
-
-function SoftButton(props: {
+function SoftButton({
+  onClick,
+  disabled,
+  variant = "ghost",
+  leftIcon,
+  children,
+}: {
   onClick?: () => void;
   disabled?: boolean;
-  title?: string;
-  variant?: "primary" | "ghost" | "danger";
+  variant?: "primary" | "ghost";
   leftIcon?: ReactNode;
   children: ReactNode;
-  className?: string;
-  type?: "button" | "submit";
 }) {
-  const {
-    onClick,
-    disabled,
-    title,
-    variant = "ghost",
-    leftIcon,
-    children,
-    className,
-    type = "button",
-  } = props;
-
-  const base =
-    "inline-flex items-center gap-2 rounded-2xl px-3.5 py-2 text-sm font-semibold " +
-    "transition outline-none active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed " +
-    "focus-visible:ring-2 focus-visible:ring-cyan-300/25";
-
   const v =
     variant === "primary"
-      ? [
-        "border",
-        SOFT_BORDER_STRONG,
-        "bg-[linear-gradient(to_bottom,rgba(34,211,238,0.16),rgba(34,211,238,0.05))]",
-        "text-[rgb(var(--fg))]",
-        "hover:bg-[linear-gradient(to_bottom,rgba(34,211,238,0.22),rgba(34,211,238,0.08))]",
-        "shadow-[0_14px_42px_rgba(34,211,238,0.10)]",
-      ].join(" ")
-      : variant === "danger"
-        ? [
-          "border",
-          SOFT_BORDER,
-          "bg-[linear-gradient(to_bottom,rgba(244,63,94,0.14),rgba(244,63,94,0.05))]",
-          "text-[rgb(var(--fg))]",
-          "hover:bg-[linear-gradient(to_bottom,rgba(244,63,94,0.20),rgba(244,63,94,0.08))]",
-          "shadow-[0_14px_42px_rgba(244,63,94,0.10)]",
-        ].join(" ")
-        : [
-          "border",
-          SOFT_BORDER,
-          GLASS_BG,
-          "text-[rgba(var(--fg),0.86)]",
-          "hover:bg-[rgba(var(--card),0.38)]",
-          SOFT_BORDER_HOVER,
-          SOFT_SHADOW,
-        ].join(" ");
+      ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50";
 
   return (
     <button
-      type={type}
-      title={title}
+      type="button"
       onClick={onClick}
       disabled={disabled}
-      className={cn(base, v, className)}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-medium transition-colors",
+        "disabled:cursor-not-allowed disabled:opacity-60",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400",
+        v
+      )}
     >
       {leftIcon}
       {children}
@@ -250,17 +139,17 @@ function StatusChip({
 }) {
   const cls =
     kind === "ok"
-      ? "bg-emerald-500/10 text-emerald-100"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : kind === "warn"
-        ? "bg-amber-500/10 text-amber-100"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
         : kind === "bad"
-          ? "bg-rose-500/10 text-rose-100"
-          : `${GLASS_BG_SOFT} text-[rgba(var(--fg),0.72)]`;
+          ? "border-red-200 bg-red-50 text-red-700"
+          : "border-slate-200 bg-slate-50 text-slate-600";
 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-2 rounded-2xl px-3 py-1.5 text-[12px] font-semibold",
+        "inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs font-medium",
         cls
       )}
     >
@@ -274,56 +163,122 @@ function HeroMetric({
   label,
   value,
   tone = "none",
-  delta,
   icon,
 }: {
   label: string;
   value: ReactNode;
   tone?: Tone;
-  delta?: number | null;
   icon?: ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        "relative overflow-hidden rounded-2xl border p-4",
-        SOFT_BORDER,
-        GLASS_BG_STRONG,
-        SOFT_SHADOW,
-        glowClasses(tone)
-      )}
-    >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/14 to-transparent" />
+    <div className={cn(PANEL, toneLeftBorder(tone), "p-4")}>
+      <div className="flex items-center gap-2 text-xs text-slate-500">
+        {icon && <span className="text-slate-400">{icon}</span>}
+        <span>{label}</span>
+      </div>
 
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[11px] text-[rgba(var(--fg),0.46)]">
-            {icon && <span className="text-[rgba(var(--fg),0.38)]">{icon}</span>}
-            <span>{label}</span>
-          </div>
-
-          <div className="mt-1 text-2xl font-semibold tracking-tight text-[rgb(var(--fg))] tabular-nums">
-            {value}
-          </div>
-        </div>
-
-        {delta !== undefined && delta !== null && (
-          <div
-            className={cn(
-              "rounded-2xl px-2.5 py-1 text-[12px] font-semibold tabular-nums",
-              delta > 0
-                ? "bg-rose-500/10 text-rose-100"
-                : delta < 0
-                  ? "bg-emerald-500/10 text-emerald-100"
-                  : "bg-[rgba(var(--card),0.26)] text-[rgba(var(--fg),0.64)]"
-            )}
-            title="Delta vs previous run"
-          >
-            {delta === 0 ? "±0" : formatDelta(delta)}
-          </div>
-        )}
+      <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 tabular-nums">
+        {value}
       </div>
     </div>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+  desc,
+  right,
+}: {
+  icon?: ReactNode;
+  title: string;
+  desc?: string;
+  right?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-slate-900">
+          {icon && <span className="text-slate-500">{icon}</span>}
+          <span className="text-base font-semibold">{title}</span>
+        </div>
+
+        {desc && <div className="mt-1 text-sm text-slate-500">{desc}</div>}
+      </div>
+
+      {right ? <div className="shrink-0">{right}</div> : null}
+    </div>
+  );
+}
+
+function ProcessStep({
+  n,
+  title,
+  desc,
+  to,
+  icon,
+}: {
+  n: number;
+  title: string;
+  desc: string;
+  to: string;
+  icon: ReactNode;
+}) {
+  return (
+    <Link
+      to={to}
+      className="group rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-slate-300 hover:bg-slate-50"
+    >
+      <div className="flex items-start gap-3">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
+          {icon}
+        </div>
+
+        <div className="min-w-0">
+          <div className="text-xs font-medium text-slate-400">Шаг {n}</div>
+          <div className="mt-1 text-sm font-semibold text-slate-900 group-hover:underline">
+            {title}
+          </div>
+          <div className="mt-1 text-xs leading-relaxed text-slate-500">
+            {desc}
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function QuickAction({
+  to,
+  title,
+  desc,
+  icon,
+}: {
+  to: string;
+  title: string;
+  desc: string;
+  icon: ReactNode;
+}) {
+  return (
+    <Link
+      to={to}
+      className="group flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 transition-colors hover:border-slate-300 hover:bg-slate-50"
+    >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
+        {icon}
+      </span>
+
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-slate-900 group-hover:underline">
+          {title}
+        </span>
+        <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">
+          {desc}
+        </span>
+      </span>
+
+      <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-slate-400 group-hover:text-slate-600" />
+    </Link>
   );
 }
 
@@ -343,243 +298,89 @@ function DownloadTile({
       href={href}
       target="_blank"
       rel="noreferrer"
-      className={cn(
-        "group flex items-center gap-3 rounded-2xl border px-3.5 py-3 transition",
-        SOFT_BORDER,
-        GLASS_BG,
-        "hover:bg-[rgba(var(--card),0.34)]",
-        SOFT_BORDER_HOVER,
-        SOFT_SHADOW,
-        "outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
-      )}
+      className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 transition-colors hover:border-slate-300 hover:bg-slate-50"
     >
-      <span
-        className={cn(
-          "grid h-10 w-10 shrink-0 place-items-center rounded-2xl",
-          "bg-[rgba(var(--fg),0.04)]"
-        )}
-      >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
         {icon}
       </span>
 
       <span className="min-w-0">
-        <span className="block truncate text-sm font-semibold text-[rgba(var(--fg),0.88)]">
+        <span className="block truncate text-sm font-semibold text-slate-900">
           {label}
         </span>
         {sub && (
-          <span className="block truncate text-[11px] text-[rgba(var(--fg),0.46)]">
-            {sub}
-          </span>
+          <span className="block truncate text-xs text-slate-500">{sub}</span>
         )}
       </span>
 
-      <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-[rgba(var(--fg),0.30)] transition group-hover:text-[rgba(var(--fg),0.60)]" />
+      <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-slate-400 group-hover:text-slate-600" />
     </a>
   );
 }
 
-function SummaryLine({
+function SummaryItem({
   label,
   value,
-  icon,
   tone = "none",
 }: {
   label: string;
   value: ReactNode;
-  icon?: ReactNode;
-  tone?: Tone;
-}) {
-  const accent =
-    tone === "ok"
-      ? "from-emerald-300/14"
-      : tone === "warn"
-        ? "from-amber-300/14"
-        : tone === "bad"
-          ? "from-rose-300/14"
-          : "from-cyan-300/06";
-
-  return (
-    <div
-      className={cn(
-        "relative overflow-hidden rounded-2xl border p-4",
-        SOFT_BORDER,
-        GLASS_BG_STRONG,
-        SOFT_SHADOW
-      )}
-    >
-      <div
-        className={cn(
-          "pointer-events-none absolute inset-0 bg-gradient-to-r to-transparent",
-          accent
-        )}
-      />
-      <div className="relative">
-        <div className="flex items-center gap-2 text-xs text-[rgba(var(--fg),0.46)]">
-          {icon && <span className="text-[rgba(var(--fg),0.36)]">{icon}</span>}
-          <span>{label}</span>
-        </div>
-        <div className="mt-1 text-sm font-semibold text-[rgba(var(--fg),0.86)] tabular-nums">
-          {value}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MiniStat({
-  label,
-  value,
-  tone = "none",
-}: {
-  label: string;
-  value: number;
   tone?: Tone;
 }) {
   const cls =
     tone === "bad"
-      ? "bg-rose-500/10 text-rose-100"
+      ? "border-red-200 bg-red-50 text-red-700"
       : tone === "warn"
-        ? "bg-amber-500/10 text-amber-100"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
         : tone === "ok"
-          ? "bg-emerald-500/10 text-emerald-100"
-          : `${GLASS_BG_SOFT} text-[rgba(var(--fg),0.72)]`;
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-slate-200 bg-slate-50 text-slate-700";
 
   return (
-    <div
-      className={cn(
-        "rounded-2xl border px-4 py-3",
-        SOFT_BORDER,
-        cls
-      )}
-    >
-      <div className="text-[11px] opacity-80">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+    <div className={cn("rounded-lg border px-3 py-2", cls)}>
+      <div className="text-xs opacity-80">{label}</div>
+      <div className="mt-1 text-sm font-semibold tabular-nums">{value}</div>
     </div>
   );
 }
-
-function KindPill({ kind }: { kind: "new" | "removed" | "changed" | "same" }) {
-  const p =
-    kind === "new"
-      ? { t: "NEW", cls: "bg-cyan-500/10 text-cyan-100" }
-      : kind === "removed"
-        ? { t: "REMOVED", cls: "bg-emerald-500/10 text-emerald-100" }
-        : kind === "changed"
-          ? { t: "CHANGED", cls: "bg-amber-500/10 text-amber-100" }
-          : { t: "—", cls: `${GLASS_BG_SOFT} text-[rgba(var(--fg),0.70)]` };
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-2xl px-3 py-1.5 text-[12px] font-semibold",
-        p.cls
-      )}
-    >
-      {p.t}
-    </span>
-  );
-}
-
-function SectionHeader({
-  icon,
-  title,
-  desc,
-  right,
-}: {
-  icon?: ReactNode;
-  title: string;
-  desc?: string;
-  right?: ReactNode;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 text-[rgba(var(--fg),0.88)]">
-          {icon && <span className="text-cyan-400">{icon}</span>}
-          <span className="text-lg font-semibold">{title}</span>
-        </div>
-        {desc && (
-          <div className="mt-1 text-sm text-[rgba(var(--fg),0.50)]">{desc}</div>
-        )}
-      </div>
-      {right ? <div className="shrink-0">{right}</div> : null}
-    </div>
-  );
-}
-
-/* ------------------------------------------
- * Dashboard
- * ------------------------------------------ */
 
 export default function Dashboard() {
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-
-  const [sortKey, setSortKey] = useState<SortKey>("run_at");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
-
-  const [diffLoading, setDiffLoading] = useState(false);
-  const [diffErr, setDiffErr] = useState("");
-  const [diff, setDiff] = useState<ReturnType<typeof computeRunDiff> | null>(
-    null
-  );
+  const [lastCreatedRunId, setLastCreatedRunId] = useState<number | null>(null);
 
   const mounted = useRef(true);
+  const navigate = useNavigate();
+  const toast = useToast();
+  const { user } = useAuth();
+
+  const isAdmin = user?.role === "admin";
 
   const orderedRuns = useMemo(() => {
     return [...runs].sort((a, b) => Number(b.id) - Number(a.id));
   }, [runs]);
 
   const last = orderedRuns[0];
-  const prev = orderedRuns[1];
-
-  const toast = useToast();
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
-
+  const recentRuns = orderedRuns.slice(0, 5);
   const tone = severityFrom(last);
 
   const kpi = useMemo(() => {
-    const lp = last ? safeNum(last?.total_products) : 0;
-    const ld = last ? safeNum(last?.deficit_products) : 0;
-    const le = last ? safeNum(last?.expiring_products) : 0;
-    const lu = last ? safeNum(last?.unmatched_installs) : 0;
-
-    const pp = prev ? safeNum(prev?.total_products) : null;
-    const pd = prev ? safeNum(prev?.deficit_products) : null;
-    const pe = prev ? safeNum(prev?.expiring_products) : null;
-    const pu = prev ? safeNum(prev?.unmatched_installs) : null;
-
     return {
-      total: { v: lp, delta: pp === null ? null : lp - pp },
-      deficit: { v: ld, delta: pd === null ? null : ld - pd },
-      expiring: { v: le, delta: pe === null ? null : le - pe },
-      unmatched: { v: lu, delta: pu === null ? null : lu - pu },
+      total: last ? safeNum(last.total_products) : 0,
+      deficit: last ? safeNum(last.deficit_products) : 0,
+      expiring: last ? safeNum(last.expiring_products) : 0,
+      unmatched: last ? safeNum(last.unmatched_installs) : 0,
     };
-  }, [last, prev]);
-
-  const baseRuns = orderedRuns;
-
-  const sortedRuns = useMemo(() => {
-    if (!sortDir) return baseRuns;
-    return [...baseRuns].sort(cmpBy(sortKey, sortDir));
-  }, [baseRuns, sortKey, sortDir]);
-
-  const toggleSort = (key: SortKey, defaultDir: Exclude<SortDir, null>) => {
-    setSortKey(key);
-    setSortDir((d) => {
-      if (sortKey !== key) return defaultDir;
-      return nextDir(d);
-    });
-  };
+  }, [last]);
 
   async function refresh() {
     setErr("");
     setLoading(true);
+
     try {
-      const r: RunRow[] = await getRuns();
+      const r = await getRuns();
       if (!mounted.current) return;
       setRuns(r);
     } catch (e: any) {
@@ -594,43 +395,11 @@ export default function Dashboard() {
   useEffect(() => {
     mounted.current = true;
     refresh();
+
     return () => {
       mounted.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    const lastRun = orderedRuns[0];
-    const prevRun = orderedRuns[1];
-
-    if (!lastRun || !prevRun) {
-      setDiff(null);
-      return;
-    }
-
-    let alive = true;
-    setDiffLoading(true);
-    setDiffErr("");
-
-    Promise.all([getRunResults(lastRun.id), getRunResults(prevRun.id)])
-      .then(([nowRows, prevRows]) => {
-        if (!alive) return;
-        setDiff(computeRunDiff(nowRows, prevRows));
-      })
-      .catch((e) => {
-        if (!alive) return;
-        setDiffErr(String(e?.message ?? e));
-      })
-      .finally(() => {
-        if (!alive) return;
-        setDiffLoading(false);
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, [orderedRuns]);
 
   async function onRun() {
     if (!isAdmin) {
@@ -656,10 +425,20 @@ export default function Dashboard() {
       const out = await runCheck();
       if (!out.ok) throw new Error(out.error ?? "Ошибка запуска");
 
+      if (out.runId) {
+        setLastCreatedRunId(out.runId);
+        window.dispatchEvent(new CustomEvent("alerts:refresh"));
+
+        navigate(`/runs/${out.runId}`);
+        return;
+      }
+
       toast.push({
         tone: "success",
         title: "Готово",
-        message: "Проверка успешно завершена. Обновляю дашборд…",
+        message: out.runId
+          ? `Проверка #${out.runId} завершена. Можно открыть детали запуска.`
+          : "Проверка успешно завершена. Обновляю дашборд…",
       });
 
       await refresh();
@@ -684,246 +463,336 @@ export default function Dashboard() {
     }
   }
 
-  async function onCopyLastId() {
-    if (!last) return;
-
-    const ok = await navigator.clipboard
-      .writeText(String(last.id))
-      .then(() => true)
-      .catch(() => false);
-
-    toast.push({
-      tone: ok ? "success" : "warning",
-      title: ok ? "Скопировано" : "Не удалось",
-      message: ok
-        ? `ID #${last.id} в буфере обмена.`
-        : "Браузер запретил доступ к clipboard.",
-      duration: 2200,
-    });
-  }
-
   const heroTitle =
     tone === "ok"
       ? "Система в порядке"
       : tone === "warn"
         ? "Есть риски"
         : tone === "bad"
-          ? "Нужны действия"
-          : "Добро пожаловать";
+          ? "Требуются действия"
+          : "Нет данных";
 
   const heroSubtitle =
     tone === "ok"
-      ? "Дефицитов нет. Можно жить спокойно."
+      ? "Дефицитов не обнаружено. Состояние лицензирования находится в норме."
       : tone === "warn"
-        ? "Есть истекающие или unmatched — проверь отчёты."
+        ? "Обнаружены истекающие лицензии или несопоставленные установки."
         : tone === "bad"
-          ? "Обнаружены дефициты — срочно разберись."
+          ? "Обнаружен дефицит лицензий. Необходимо проверить проблемные позиции."
           : isAdmin
-            ? "Запусти первую проверку, чтобы увидеть состояние."
-            : "Ожидается первый запуск проверки, чтобы показать состояние системы.";
-
-  const heroAccent =
-    tone === "ok"
-      ? "from-emerald-300/14 via-cyan-300/08 to-transparent"
-      : tone === "warn"
-        ? "from-amber-300/14 via-cyan-300/08 to-transparent"
-        : tone === "bad"
-          ? "from-rose-300/14 via-cyan-300/08 to-transparent"
-          : "from-cyan-300/12 via-white/5 to-transparent";
-
-  const topDiffItems = useMemo(() => {
-    if (!diff) return [];
-    return [...diff.items]
-      .filter((x) => x.kind !== "same")
-      .sort((a, b) => diffScore(b) - diffScore(a))
-      .slice(0, 8);
-  }, [diff]);
+            ? "Запустите первую проверку, чтобы получить состояние лицензирования."
+            : "Ожидается первый запуск проверки.";
 
   return (
     <div className="space-y-6">
-      {/* HERO */}
-      <Card
-        className={cn(
-          "relative overflow-hidden rounded-3xl p-5 md:p-6",
-          "bg-[linear-gradient(to_bottom,rgba(var(--bg),0.74),rgba(var(--bg),0.36))]",
-          CARD_SHADOW
-        )}
-      >
-        <div
-          className={cn(
-            "pointer-events-none absolute inset-0 bg-gradient-to-r",
-            heroAccent
-          )}
-        />
-        <div className="pointer-events-none absolute -left-20 -top-20 h-72 w-72 rounded-full bg-cyan-500/8 blur-3xl" />
-        <div className="pointer-events-none absolute -right-12 top-0 h-72 w-72 rounded-full bg-indigo-500/8 blur-3xl" />
-
-        <div className="relative space-y-5">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-            <div className="flex min-w-0 flex-1 items-start gap-4">
-              <div
-                className={cn(
-                  "grid h-14 w-14 shrink-0 place-items-center rounded-3xl",
-                  "bg-[rgba(var(--fg),0.04)]",
-                  glowClasses(tone)
-                )}
-              >
-                {tone === "ok" ? (
-                  <CircleCheck className="h-7 w-7 text-emerald-300/90" />
-                ) : tone === "warn" ? (
-                  <TriangleAlert className="h-7 w-7 text-amber-300/90" />
-                ) : tone === "bad" ? (
-                  <TriangleAlert className="h-7 w-7 text-rose-300/90" />
-                ) : (
-                  <Sparkles className="h-7 w-7 text-cyan-300/85" />
-                )}
-              </div>
-
-              <div className="min-w-0">
-                <div className="text-xs tracking-wide text-[rgba(var(--fg),0.46)]">
-                  License Monitor
-                </div>
-
-                <div className="mt-1 text-3xl font-semibold tracking-tight text-[rgb(var(--fg))]">
-                  {heroTitle}
-                </div>
-
-                <div className="mt-2 max-w-[72ch] text-sm leading-relaxed text-[rgba(var(--fg),0.58)]">
-                  {heroSubtitle}
-                </div>
-
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <StatusChip kind={tone}>
-                    {tone === "ok"
-                      ? "OK"
-                      : tone === "warn"
-                        ? "WARN"
-                        : tone === "bad"
-                          ? "BAD"
-                          : "NO RUNS"}
-                  </StatusChip>
-
-                  {last && (
-                    <span className="inline-flex items-center gap-2 text-[12px] text-[rgba(var(--fg),0.46)]">
-                      <Clock className="h-4 w-4" />
-                      <span>Последний запуск: {String(last.run_at)}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
+      <Card className={cn(PANEL, toneLeftBorder(tone), "p-5")}>
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex min-w-0 flex-1 items-start gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50">
+              {tone === "ok" ? (
+                <CircleCheck className="h-6 w-6 text-emerald-600" />
+              ) : tone === "warn" ? (
+                <TriangleAlert className="h-6 w-6 text-amber-600" />
+              ) : tone === "bad" ? (
+                <TriangleAlert className="h-6 w-6 text-red-600" />
+              ) : (
+                <Clock className="h-6 w-6 text-slate-500" />
+              )}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              {isAdmin && (
-                <SoftButton
-                  variant="primary"
-                  onClick={onRun}
-                  disabled={busy}
-                  leftIcon={<Play className="h-4 w-4" />}
-                  title="Запустить проверку"
-                >
-                  {busy ? "Запускаю..." : "Запустить"}
-                </SoftButton>
-              )}
+            <div className="min-w-0">
+              <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                License Monitor
+              </div>
 
+              <div className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+                {heroTitle}
+              </div>
+
+              <div className="mt-2 max-w-[72ch] text-sm leading-relaxed text-slate-600">
+                {heroSubtitle}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <StatusChip kind={tone}>
+                  {tone === "ok"
+                    ? "Норма"
+                    : tone === "warn"
+                      ? "Предупреждение"
+                      : tone === "bad"
+                        ? "Критично"
+                        : "Нет запусков"}
+                </StatusChip>
+
+                {last && (
+                  <span className="inline-flex items-center gap-2 text-xs text-slate-500">
+                    <Clock className="h-4 w-4" />
+                    Последний запуск: {String(last.run_at)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+            {isAdmin && (
               <SoftButton
-                onClick={() => refresh()}
+                variant="primary"
+                onClick={onRun}
                 disabled={busy}
-                leftIcon={
-                  <RefreshCw
-                    className={cn("h-4 w-4", loading && "animate-spin")}
-                  />
-                }
-                title="Обновить"
+                leftIcon={<Play className="h-4 w-4" />}
               >
-                Обновить
+                {busy ? "Запускаю..." : "Запустить проверку"}
               </SoftButton>
+            )}
 
-              {last && (
-                <>
-                  <SoftButton
-                    onClick={onCopyLastId}
-                    disabled={busy}
-                    leftIcon={<Copy className="h-4 w-4" />}
-                    title="Скопировать ID последнего запуска"
-                  >
-                    ID
-                  </SoftButton>
+            <SoftButton
+              onClick={() => refresh()}
+              disabled={busy}
+              leftIcon={
+                <RefreshCw
+                  className={cn("h-4 w-4", loading && "animate-spin")}
+                />
+              }
+            >
+              Обновить
+            </SoftButton>
 
-                  <Link
-                    to={`/runs/${last.id}`}
-                    className={cn(
-                      "inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm font-semibold",
-                      SOFT_BORDER,
-                      GLASS_BG,
-                      "text-[rgba(var(--fg),0.86)]",
-                      "hover:bg-[rgba(var(--card),0.38)]",
-                      SOFT_BORDER_HOVER,
-                      SOFT_SHADOW,
-                      "transition outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/25"
-                    )}
-                    title="Открыть последний запуск"
-                  >
-                    Открыть #{last.id}
-                    <ArrowUpRight className="h-4 w-4 text-[rgba(var(--fg),0.50)]" />
-                  </Link>
-                </>
-              )}
-            </div>
+            {last && (
+              <SoftButton
+                onClick={() => navigate(`/runs/${last.id}`)}
+                leftIcon={<ArrowUpRight className="h-4 w-4" />}
+              >
+                Открыть #{last.id}
+              </SoftButton>
+            )}
           </div>
+        </div>
 
-          {err && (
-            <div className="rounded-2xl bg-rose-500/10 px-4 py-3">
-              <div className="text-sm font-semibold text-rose-100">Ошибка</div>
-              <div className="mt-1 break-words text-xs text-rose-200/80">
-                {err}
-              </div>
-            </div>
-          )}
+        {err && (
+          <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+            <div className="text-sm font-semibold text-red-700">Ошибка</div>
+            <div className="mt-1 break-words text-xs text-red-600">{err}</div>
+          </div>
+        )}
 
-          {!isAdmin && (
+        {!isAdmin && (
+          <div className="mt-5">
             <ViewerNotice message="У вас нет прав на запуск новых проверок и изменение данных. Доступен только просмотр истории и отчётов." />
-          )}
-
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <HeroMetric
-              label="Продуктов"
-              value={formatInt(kpi.total.v)}
-              tone="none"
-              delta={kpi.total.delta}
-              icon={<Layers className="h-4 w-4" />}
-            />
-            <HeroMetric
-              label="Дефицитов"
-              value={formatInt(kpi.deficit.v)}
-              tone={kpi.deficit.v > 0 ? "bad" : "ok"}
-              delta={kpi.deficit.delta}
-              icon={<ShieldCheck className="h-4 w-4" />}
-            />
-            <HeroMetric
-              label="Истекающих"
-              value={formatInt(kpi.expiring.v)}
-              tone={kpi.expiring.v > 0 ? "warn" : "ok"}
-              delta={kpi.expiring.delta}
-              icon={<TimerReset className="h-4 w-4" />}
-            />
-            <HeroMetric
-              label="Unmatched"
-              value={formatInt(kpi.unmatched.v)}
-              tone={kpi.unmatched.v > 0 ? "warn" : "ok"}
-              delta={kpi.unmatched.delta}
-              icon={<Zap className="h-4 w-4" />}
-            />
           </div>
+        )}
+
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <HeroMetric
+            label="Продуктов"
+            value={formatInt(kpi.total)}
+            icon={<Layers className="h-4 w-4" />}
+          />
+
+          <HeroMetric
+            label="Дефицитов"
+            value={formatInt(kpi.deficit)}
+            tone={kpi.deficit > 0 ? "bad" : "ok"}
+            icon={<ShieldCheck className="h-4 w-4" />}
+          />
+
+          <HeroMetric
+            label="Истекающих"
+            value={formatInt(kpi.expiring)}
+            tone={kpi.expiring > 0 ? "warn" : "ok"}
+            icon={<TimerReset className="h-4 w-4" />}
+          />
+
+          <HeroMetric
+            label="Несопоставленных"
+            value={formatInt(kpi.unmatched)}
+            tone={kpi.unmatched > 0 ? "warn" : "ok"}
+            icon={<Zap className="h-4 w-4" />}
+          />
         </div>
       </Card>
 
-      {/* EXPORTS */}
-      <Card className={cn("rounded-3xl p-5", CARD_SHADOW)}>
+      <Card className={cn(PANEL, "p-5")}>
         <SectionHeader
-          icon={<FolderOutput className="h-5 w-5" />}
-          title="Reports & exports"
-          desc="Быстрый доступ к основным файлам отчёта."
+          icon={<ListChecks className="h-5 w-5" />}
+          title="Рабочий процесс мониторинга"
+          desc="Основная цепочка системы: от CSV-данных до расчёта рисков и отчёта."
+          right={
+            lastCreatedRunId ? (
+              <SoftButton
+                variant="primary"
+                onClick={() => navigate(`/runs/${lastCreatedRunId}`)}
+                leftIcon={<ArrowUpRight className="h-4 w-4" />}
+              >
+                Открыть запуск #{lastCreatedRunId}
+              </SoftButton>
+            ) : last ? (
+              <Link
+                to={`/runs/${last.id}`}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Последний запуск #{last.id}
+                <ArrowUpRight className="h-4 w-4 text-slate-500" />
+              </Link>
+            ) : null
+          }
+        />
+
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <ProcessStep
+            n={1}
+            title="Импорты CSV"
+            desc="Загрузка installations, licenses и mapping."
+            to="/imports"
+            icon={<Upload className="h-4 w-4" />}
+          />
+
+          <ProcessStep
+            n={2}
+            title="Сопоставление"
+            desc="Правила приводят названия ПО к продуктам."
+            to="/dictionaries/mapping"
+            icon={<GitBranch className="h-4 w-4" />}
+          />
+
+          <ProcessStep
+            n={3}
+            title="Проверка"
+            desc="Расчёт потребности, лицензий, дельты и рисков."
+            to="/runs"
+            icon={<Play className="h-4 w-4" />}
+          />
+
+          <ProcessStep
+            n={4}
+            title="Детали"
+            desc="Дефицит, сроки и несопоставленные строки."
+            to={last ? `/runs/${last.id}` : "/runs"}
+            icon={<FileWarning className="h-4 w-4" />}
+          />
+
+          <ProcessStep
+            n={5}
+            title="Реестр"
+            desc="Организационные лицензии и доступные места."
+            to="/licenses"
+            icon={<Database className="h-4 w-4" />}
+          />
+        </div>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <Card className={cn(PANEL, "p-5")}>
+          <SectionHeader
+            icon={<Zap className="h-5 w-5" />}
+            title="Быстрые действия"
+            desc="Переходы к основным разделам системы."
+          />
+
+          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <QuickAction
+              to="/imports"
+              title="Импортировать CSV"
+              desc="Обновить установки, лицензии или mapping."
+              icon={<Upload className="h-4 w-4" />}
+            />
+
+            <QuickAction
+              to={last ? `/runs/${last.id}` : "/runs"}
+              title="Детали запуска"
+              desc="Открыть последний результат проверки."
+              icon={<ClipboardList className="h-4 w-4" />}
+            />
+
+            <QuickAction
+              to="/licenses"
+              title="Реестр лицензий"
+              desc="Места, сроки действия и типы лицензий."
+              icon={<Database className="h-4 w-4" />}
+            />
+
+            <QuickAction
+              to="/dictionaries/mapping"
+              title="Правила сопоставления"
+              desc="Связать названия ПО из CSV с продуктами."
+              icon={<GitBranch className="h-4 w-4" />}
+            />
+
+            <QuickAction
+              to="/runs"
+              title="История запусков"
+              desc="Все проверки и сравнение результатов."
+              icon={<Clock className="h-4 w-4" />}
+            />
+
+            <QuickAction
+              to="/client-licenses"
+              title="Клиентские ключи"
+              desc="Отдельный контур server-side licensing Entitlex."
+              icon={<KeyRound className="h-4 w-4" />}
+            />
+          </div>
+        </Card>
+
+        <Card className={cn(PANEL, "p-5")}>
+          <SectionHeader
+            icon={<Clock className="h-5 w-5" />}
+            title="Последний запуск"
+            desc="Краткая сводка последней проверки."
+            right={
+              last ? (
+                <Link
+                  to={`/runs/${last.id}`}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Открыть #{last.id}
+                  <ArrowUpRight className="h-4 w-4 text-slate-500" />
+                </Link>
+              ) : null
+            }
+          />
+
+          {!last ? (
+            <div className="mt-4">
+              <TableEmpty
+                title="Запусков пока нет"
+                description={
+                  isAdmin
+                    ? "Запустите проверку или загрузите CSV в разделе импортов."
+                    : "История запусков пока пуста."
+                }
+              />
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <SummaryItem label="Дата" value={String(last.run_at)} />
+              <SummaryItem label="Продуктов" value={formatInt(last.total_products)} />
+              <SummaryItem
+                label="Дефицитов"
+                value={formatInt(last.deficit_products)}
+                tone={safeNum(last.deficit_products) > 0 ? "bad" : "ok"}
+              />
+              <SummaryItem
+                label="Истекающих"
+                value={formatInt(last.expiring_products)}
+                tone={safeNum(last.expiring_products) > 0 ? "warn" : "ok"}
+              />
+              <SummaryItem
+                label="Несопоставленных"
+                value={formatInt(last.unmatched_installs)}
+                tone={safeNum(last.unmatched_installs) > 0 ? "warn" : "ok"}
+              />
+              <SummaryItem label="ID запуска" value={`#${last.id}`} />
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <Card className={cn(PANEL, "p-5")}>
+        <SectionHeader
+          icon={<FileSpreadsheet className="h-5 w-5" />}
+          title="Отчёты и экспорт"
+          desc="Файлы формируются по результатам последней проверки."
         />
 
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -931,469 +800,128 @@ export default function Dashboard() {
             href={download.xlsx}
             label="Excel"
             sub="Сводная таблица"
-            icon={<FileSpreadsheet className="h-4 w-4 text-cyan-300/85" />}
+            icon={<FileSpreadsheet className="h-4 w-4" />}
           />
+
           <DownloadTile
             href={download.reportCsv}
             label="report.csv"
             sub="Отчёт по продуктам"
-            icon={<FileText className="h-4 w-4 text-cyan-300/85" />}
+            icon={<FileText className="h-4 w-4" />}
           />
+
           <DownloadTile
             href={download.runsCsv}
             label="runs.csv"
             sub="История запусков"
-            icon={<DownloadIcon className="h-4 w-4 text-cyan-300/85" />}
+            icon={<DownloadIcon className="h-4 w-4" />}
           />
+
           <DownloadTile
             href={download.unmatchedCsv}
             label="unmatched.csv"
-            sub="Несопоставленные установки"
-            icon={<DownloadIcon className="h-4 w-4 text-cyan-300/85" />}
+            sub="Несопоставленные строки"
+            icon={<DownloadIcon className="h-4 w-4" />}
           />
+
           <DownloadTile
             href={download.badRowsCsv}
             label="bad_rows.csv"
             sub="Проблемные строки"
-            icon={<DownloadIcon className="h-4 w-4 text-cyan-300/85" />}
+            icon={<DownloadIcon className="h-4 w-4" />}
           />
         </div>
       </Card>
 
-      {/* SUMMARY + DIFF */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-        <Card className={cn("rounded-3xl p-5", CARD_SHADOW)}>
-          <SectionHeader
-            icon={<Clock className="h-5 w-5" />}
-            title="Последний запуск"
-            desc="Быстрый обзор и переход в детали."
-            right={
-              last ? (
-                <Link
-                  to={`/runs/${last.id}`}
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2",
-                    SOFT_BORDER,
-                    GLASS_BG,
-                    "hover:bg-[rgba(var(--card),0.38)]",
-                    SOFT_BORDER_HOVER,
-                    "transition"
-                  )}
-                >
-                  <span className="text-sm font-semibold text-[rgba(var(--fg),0.86)]">
-                    Открыть #{last.id}
-                  </span>
-                  <ArrowUpRight className="h-4 w-4 text-[rgba(var(--fg),0.46)]" />
-                </Link>
-              ) : (
-                <StatusChip kind="none">Нет данных</StatusChip>
-              )
-            }
-          />
-
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-            <SummaryLine
-              label="Дата"
-              value={last ? String(last.run_at) : "—"}
-              icon={<Clock className="h-4 w-4" />}
-            />
-            <SummaryLine
-              label="Продуктов"
-              value={last ? formatInt(last?.total_products) : "—"}
-              tone="none"
-              icon={<Layers className="h-4 w-4" />}
-            />
-            <SummaryLine
-              label="Дефицитов"
-              value={last ? formatInt(last?.deficit_products) : "—"}
-              tone={last && safeNum(last?.deficit_products) > 0 ? "bad" : "ok"}
-              icon={<ShieldCheck className="h-4 w-4" />}
-            />
-            <SummaryLine
-              label="Истекающих"
-              value={last ? formatInt(last?.expiring_products) : "—"}
-              tone={last && safeNum(last?.expiring_products) > 0 ? "warn" : "ok"}
-              icon={<TimerReset className="h-4 w-4" />}
-            />
-            <SummaryLine
-              label="Unmatched"
-              value={last ? formatInt(last?.unmatched_installs) : "—"}
-              tone={last && safeNum(last?.unmatched_installs) > 0 ? "warn" : "ok"}
-              icon={<Zap className="h-4 w-4" />}
-            />
-            <SummaryLine
-              label="Предыдущий запуск"
-              value={prev ? `#${prev.id}` : "—"}
-              icon={<ChevronRight className="h-4 w-4" />}
-            />
-          </div>
-        </Card>
-
-        <Card className={cn("rounded-3xl p-5", CARD_SHADOW)}>
-          <SectionHeader
-            icon={<Activity className="h-5 w-5" />}
-            title="Изменения с прошлого запуска"
-            desc="Последний прогон против предыдущего."
-            right={
-              <div className="text-[11px] text-[rgba(var(--fg),0.45)]">
-                {diffLoading
-                  ? "Считаю diff…"
-                  : diff
-                    ? `Δ items: ${diff.items.length}`
-                    : "—"}
-              </div>
-            }
-          />
-
-          {diffLoading ? (
-            <div className="mt-4">
-              <TableSkeleton rows={5} cols={4} />
-            </div>
-          ) : diffErr ? (
-            <div className="mt-4">
-              <TableEmpty title="Не удалось посчитать diff" description={diffErr} />
-            </div>
-          ) : !diff ? (
-            <div className="mt-4">
-              <TableEmpty
-                title="Недостаточно данных"
-                description="Нужны минимум два запуска, чтобы построить diff."
-              />
-            </div>
-          ) : (
-            <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <MiniStat
-                  label="Новые строки"
-                  value={diff.counts.newRows}
-                  tone={diff.counts.newRows ? "warn" : "ok"}
-                />
-                <MiniStat
-                  label="Исчезли"
-                  value={diff.counts.removedRows}
-                  tone="ok"
-                />
-                <MiniStat
-                  label="Ухудшилось"
-                  value={diff.counts.worsened}
-                  tone={diff.counts.worsened ? "bad" : "ok"}
-                />
-                <MiniStat
-                  label="Улучшилось"
-                  value={diff.counts.improved}
-                  tone="ok"
-                />
-                <MiniStat
-                  label="Новые expires"
-                  value={diff.counts.expiresNew}
-                  tone={diff.counts.expiresNew ? "warn" : "ok"}
-                />
-              </div>
-
-              <div
-                className={cn(
-                  "rounded-3xl border p-3",
-                  SOFT_BORDER,
-                  "bg-[rgba(var(--card),0.12)]"
-                )}
-              >
-                {topDiffItems.length === 0 ? (
-                  <div className="px-2 py-3 text-sm text-[rgba(var(--fg),0.52)]">
-                    Значимых изменений нет.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {topDiffItems.map((x) => (
-                      <div
-                        key={x.key}
-                        className={cn(
-                          "grid grid-cols-1 gap-3 rounded-2xl border p-3",
-                          SOFT_BORDER,
-                          GLASS_BG_SOFT,
-                          "md:grid-cols-[auto_minmax(0,1fr)_auto_auto]"
-                        )}
-                      >
-                        <div>
-                          <KindPill kind={x.kind} />
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-[rgba(var(--fg),0.88)]">
-                            {x.product}
-                          </div>
-                          <div className="mt-0.5 truncate text-[12px] text-[rgba(var(--fg),0.48)]">
-                            {x.license_type}
-                          </div>
-                        </div>
-
-                        <div
-                          className={cn(
-                            "text-sm font-semibold tabular-nums",
-                            x.delta_now < x.delta_prev
-                              ? "text-rose-200"
-                              : x.delta_now > x.delta_prev
-                                ? "text-emerald-200"
-                                : "text-[rgba(var(--fg),0.74)]"
-                          )}
-                        >
-                          {x.delta_prev} → {x.delta_now}
-                        </div>
-
-                        <div className="text-sm tabular-nums text-[rgba(var(--fg),0.66)]">
-                          {x.demand_now}/{x.licenses_now}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* FULL DIFF TABLE */}
-      <Card className={cn("rounded-3xl overflow-hidden p-0", CARD_SHADOW)}>
-        <Table>
-          <TableCaption
-            title="Подробный diff"
-            description="Топ-30 изменений между последним и предыдущим запуском."
-            right={
-              <div className="text-[11px] text-[rgba(var(--fg),0.45)]">
-                {diffLoading
-                  ? "Считаю diff…"
-                  : diff
-                    ? `Δ items: ${diff.items.length}`
-                    : "—"}
-              </div>
-            }
-          />
-
-          {diffLoading ? (
-            <TableSkeleton rows={7} cols={6} />
-          ) : diffErr ? (
-            <TableEmpty title="Не удалось посчитать diff" description={diffErr} />
-          ) : !diff ? (
-            <TableEmpty
-              title="Недостаточно данных"
-              description="Нужны минимум два запуска, чтобы построить diff."
-            />
-          ) : (
-            <div className="px-4 pb-4">
-              <div className="mt-3">
-                <TableScroll className="max-h-[50vh]">
-                  <TableInner stickyHeader density="comfortable">
-                    <THead>
-                      <tr>
-                        <SortTh label="kind" dir={null} />
-                        <SortTh label="product" dir={null} />
-                        <SortTh label="license_type" dir={null} />
-                        <SortTh label="delta" dir={null} />
-                        <SortTh label="expires" dir={null} />
-                        <SortTh label="demand/licenses" dir={null} />
-                      </tr>
-                    </THead>
-
-                    <TBody>
-                      {[...diff.items]
-                        .filter((x) => x.kind !== "same")
-                        .sort((a, b) => diffScore(b) - diffScore(a))
-                        .slice(0, 30)
-                        .map((x) => (
-                          <Tr key={x.key}>
-                            <Td>
-                              <KindPill kind={x.kind} />
-                            </Td>
-
-                            <Td className="font-semibold text-[rgba(var(--fg),0.86)]">
-                              {x.product}
-                            </Td>
-
-                            <Td className="text-[rgba(var(--fg),0.70)]">
-                              {x.license_type}
-                            </Td>
-
-                            <Td
-                              className={cn(
-                                "font-semibold tabular-nums",
-                                x.delta_now < x.delta_prev
-                                  ? "text-rose-200"
-                                  : x.delta_now > x.delta_prev
-                                    ? "text-emerald-200"
-                                    : "text-[rgba(var(--fg),0.74)]"
-                              )}
-                            >
-                              {x.delta_prev} → {x.delta_now}
-                            </Td>
-
-                            <Td className="text-[rgba(var(--fg),0.74)]">
-                              {x.expires_prev === x.expires_now ? (
-                                <span className="text-[rgba(var(--fg),0.50)]">—</span>
-                              ) : x.expires_now ? (
-                                <span className="font-semibold text-amber-200">
-                                  became YES
-                                </span>
-                              ) : (
-                                <span className="font-semibold text-emerald-200">
-                                  became NO
-                                </span>
-                              )}
-                            </Td>
-
-                            <Td className="tabular-nums text-[rgba(var(--fg),0.74)]">
-                              {x.demand_prev}/{x.licenses_prev} → {x.demand_now}/
-                              {x.licenses_now}
-                            </Td>
-                          </Tr>
-                        ))}
-                    </TBody>
-                  </TableInner>
-                </TableScroll>
-              </div>
-
-              <div className="mt-3 text-[12px] text-[rgba(var(--fg),0.45)]">
-                Показаны топ-30 изменений. Полный diff можно вынести на отдельную
-                страницу позже.
-              </div>
-            </div>
-          )}
-        </Table>
-      </Card>
-
-      {/* RUNS TABLE */}
-      <Card className={cn("rounded-3xl overflow-hidden p-0", CARD_SHADOW)}>
+      <Card className={cn(PANEL, "overflow-hidden p-0")}>
         <Table>
           <TableCaption
             title="Последние запуски"
-            description="История прогонов. Сортируй по колонкам."
+            description="Краткая история последних проверок. Полная история доступна в разделе запусков."
             right={
-              <div className="text-[11px] text-[rgba(var(--fg),0.45)]">
-                {loading
-                  ? "Обновляю…"
-                  : `Показано: ${clamp(sortedRuns.length, 0, 50)}`}
-              </div>
+              <Link
+                to="/runs"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Все запуски
+                <ArrowUpRight className="h-4 w-4 text-slate-500" />
+              </Link>
             }
           />
 
           {loading ? (
-            <TableSkeleton rows={7} cols={6} />
-          ) : sortedRuns.length === 0 ? (
+            <TableSkeleton rows={5} cols={6} />
+          ) : recentRuns.length === 0 ? (
             <TableEmpty
               title="Запусков пока нет"
               description={
                 isAdmin
-                  ? "Нажми «Запустить», чтобы создать первый прогон."
+                  ? "Нажмите «Запустить проверку», чтобы создать первый прогон."
                   : "История запусков пока пуста."
               }
             />
           ) : (
-            <TableScroll className="max-h-[62vh]">
-              <TableInner stickyHeader density="comfortable">
+            <TableScroll>
+              <TableInner density="comfortable">
                 <THead>
                   <tr>
-                    <SortTh
-                      label="id"
-                      dir={sortKey === "id" ? sortDir : null}
-                      onToggle={() => toggleSort("id", "asc")}
-                      hint="Sort by id"
-                    />
-                    <SortTh
-                      label="run_at"
-                      dir={sortKey === "run_at" ? sortDir : null}
-                      onToggle={() => toggleSort("run_at", "desc")}
-                      hint="Sort by run time"
-                    />
-                    <SortTh
-                      label="products"
-                      dir={sortKey === "total_products" ? sortDir : null}
-                      onToggle={() => toggleSort("total_products", "desc")}
-                      hint="Sort by total products"
-                    />
-                    <SortTh
-                      label="deficit"
-                      dir={sortKey === "deficit_products" ? sortDir : null}
-                      onToggle={() => toggleSort("deficit_products", "desc")}
-                      hint="Sort by deficits"
-                    />
-                    <SortTh
-                      label="expiring"
-                      dir={sortKey === "expiring_products" ? sortDir : null}
-                      onToggle={() => toggleSort("expiring_products", "desc")}
-                      hint="Sort by expiring"
-                    />
-                    <SortTh
-                      label="unmatched"
-                      dir={sortKey === "unmatched_installs" ? sortDir : null}
-                      onToggle={() => toggleSort("unmatched_installs", "desc")}
-                      hint="Sort by unmatched installs"
-                    />
+                    <Th>ID</Th>
+                    <Th>Дата</Th>
+                    <Th>Продукты</Th>
+                    <Th>Дефицит</Th>
+                    <Th>Истекают</Th>
+                    <Th>Несопоставленные</Th>
                   </tr>
                 </THead>
 
                 <TBody>
-                  {sortedRuns.slice(0, 50).map((r) => {
+                  {recentRuns.map((r) => {
                     const deficit = safeNum(r.deficit_products);
                     const expiring = safeNum(r.expiring_products);
                     const unmatched = safeNum(r.unmatched_installs);
 
-                    const rowTone: Tone =
-                      deficit > 0
-                        ? "bad"
-                        : expiring > 0 || unmatched > 0
-                          ? "warn"
-                          : "ok";
-
                     return (
                       <Tr key={r.id}>
                         <Td>
-                          <Link
-                            className={cn(
-                              "inline-flex items-center gap-2 font-semibold hover:underline underline-offset-4",
-                              rowTone === "bad"
-                                ? "text-rose-200/90 hover:text-rose-200"
-                                : rowTone === "warn"
-                                  ? "text-amber-200/90 hover:text-amber-200"
-                                  : "text-cyan-200/90 hover:text-cyan-200"
-                            )}
-                            to={`/runs/${r.id}`}
-                          >
-                            #{r.id}
-                            <span className="text-[11px] font-normal text-[rgba(var(--fg),0.34)]">
-                              details
-                            </span>
-                          </Link>
+                          <div className="flex flex-col gap-1">
+                            <Link
+                              to={`/runs/${r.id}`}
+                              className="font-semibold text-slate-900 hover:underline underline-offset-4"
+                            >
+                              #{r.id}
+                            </Link>
+
+                            <Link
+                              to={`/runs/${r.id}/diff`}
+                              className="text-xs text-blue-600 hover:underline"
+                            >
+                              Сравнить
+                            </Link>
+                          </div>
                         </Td>
 
-                        <Td className="text-[rgba(var(--fg),0.70)]">
-                          {String(r.run_at)}
-                        </Td>
-
-                        <Td className="tabular-nums">
-                          {formatInt(r.total_products)}
-                        </Td>
-
+                        <Td className="text-slate-600">{String(r.run_at)}</Td>
+                        <Td className="tabular-nums">{formatInt(r.total_products)}</Td>
                         <Td
                           className={cn(
                             "tabular-nums",
-                            deficit > 0 ? "text-rose-200" : "text-[rgba(var(--fg),0.74)]"
+                            deficit > 0 ? "font-semibold text-red-600" : "text-slate-700"
                           )}
                         >
                           {formatInt(deficit)}
                         </Td>
-
                         <Td
                           className={cn(
                             "tabular-nums",
-                            expiring > 0 ? "text-amber-200" : "text-[rgba(var(--fg),0.74)]"
+                            expiring > 0 ? "font-semibold text-amber-600" : "text-slate-700"
                           )}
                         >
                           {formatInt(expiring)}
                         </Td>
-
                         <Td
                           className={cn(
                             "tabular-nums",
-                            unmatched > 0 ? "text-amber-200" : "text-[rgba(var(--fg),0.74)]"
+                            unmatched > 0 ? "font-semibold text-amber-600" : "text-slate-700"
                           )}
                         >
                           {formatInt(unmatched)}

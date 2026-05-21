@@ -800,6 +800,18 @@ export function createMappingRule(
 ): MappingRuleRow {
   const now = new Date().toISOString();
 
+  const duplicate = db.prepare(`
+  SELECT id
+  FROM mapping_rules
+  WHERE LOWER(TRIM(pattern)) = LOWER(TRIM(?))
+    AND LOWER(TRIM(match_type)) = LOWER(TRIM(?))
+  LIMIT 1
+`).get(input.pattern, input.match_type?.trim() || "contains") as { id: number } | undefined;
+
+  if (duplicate) {
+    throw new Error("mapping rule already exists");
+  }
+
   db.prepare(`
     INSERT INTO mapping_rules (
       pattern,
@@ -844,6 +856,19 @@ export function updateMappingRule(
   input: MappingRuleInput
 ): MappingRuleRow {
   const now = new Date().toISOString();
+
+  const duplicate = db.prepare(`
+  SELECT id
+  FROM mapping_rules
+  WHERE id <> ?
+    AND LOWER(TRIM(pattern)) = LOWER(TRIM(?))
+    AND LOWER(TRIM(match_type)) = LOWER(TRIM(?))
+  LIMIT 1
+`).get(id, input.pattern, input.match_type ?? "contains") as { id: number } | undefined;
+
+  if (duplicate) {
+    throw new Error("mapping rule already exists");
+  }
 
   db.prepare(`
     UPDATE mapping_rules
@@ -1267,7 +1292,10 @@ function isExpired(expiresAt: string | null): boolean {
 }
 
 function normalizeLicenseKey(key: string): string {
-  return key.trim();
+  return String(key || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
 }
 
 export function createLicenseEvent(
@@ -1450,6 +1478,21 @@ export function updateClientLicense(
     id
   );
 
+  if (input.status === "blocked") {
+    db.prepare(`
+    UPDATE license_activations
+    SET status = 'deactivated'
+    WHERE license_id = ?
+      AND status = 'active'
+  `).run(id);
+
+    createLicenseEvent(db, {
+      license_id: id,
+      event_type: "blocked",
+      message: "license blocked by admin",
+    });
+  }
+
   const row = getClientLicenseById(db, id);
   if (!row) throw new Error("client license update failed");
 
@@ -1579,16 +1622,55 @@ export function activateLicense(
   }
 
   if (existingActivation?.status === "deactivated") {
+    const activeCount = countActiveActivations(db, license.id);
+
+    if (activeCount >= license.max_activations) {
+      createLicenseEvent(db, {
+        license_id: license.id,
+        activation_id: existingActivation.id,
+        event_type: "activate_denied",
+        device_id: deviceId,
+        ip_address: input.ip_address,
+        message: "activation_limit_exceeded",
+      });
+
+      return { ok: true, valid: false, reason: "activation_limit_exceeded" };
+    }
+
+    const now = new Date().toISOString();
+
+    db.prepare(`
+    UPDATE license_activations
+    SET
+      status = 'active',
+      device_name = ?,
+      activated_at = ?,
+      last_check_at = ?
+    WHERE id = ?
+  `).run(
+      input.device_name?.trim() || existingActivation.device_name || null,
+      now,
+      now,
+      existingActivation.id
+    );
+
     createLicenseEvent(db, {
       license_id: license.id,
       activation_id: existingActivation.id,
-      event_type: "activate_denied",
+      event_type: "activate_success",
       device_id: deviceId,
       ip_address: input.ip_address,
-      message: "deactivated",
+      message: "reactivated",
     });
 
-    return { ok: true, valid: false, reason: "deactivated" };
+    return {
+      ok: true,
+      valid: true,
+      license_id: license.id,
+      activation_id: existingActivation.id,
+      status: license.status,
+      expires_at: license.expires_at,
+    };
   }
 
   const activeCount = countActiveActivations(db, license.id);
@@ -1801,6 +1883,19 @@ export function deactivateLicense(
       device_id: deviceId,
       ip_address: input.ip_address,
       message: "activation not found",
+    });
+
+    return { ok: true, deactivated: false };
+  }
+
+  if (activation.status === "deactivated") {
+    createLicenseEvent(db, {
+      license_id: license.id,
+      activation_id: activation.id,
+      event_type: "deactivated",
+      device_id: deviceId,
+      ip_address: input.ip_address,
+      message: "device already deactivated",
     });
 
     return { ok: true, deactivated: false };

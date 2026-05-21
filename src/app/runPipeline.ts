@@ -45,7 +45,12 @@ function registryToPipelineLicenses(
   return rows.map((row) => ({
     product_name: row.product,
     license_type: row.license_type,
-    count: String(Math.max(0, Number(row.seats_total) || 0)),
+    count: String(
+      Math.max(
+        0,
+        (Number(row.seats_total) || 0) - (Number(row.seats_used) || 0)
+      )
+    ),
     end_date: row.expires_at || "",
   }));
 }
@@ -166,7 +171,7 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
     match_type: r.match_type,
   }));
 
-  const mergedMappingRows = [...mappingRows, ...dbMappingRows];
+  const mergedMappingRows = [...dbMappingRows, ...mappingRows];
   const rules = buildRules(mergedMappingRows);
 
   createImportLog(db, {
@@ -229,23 +234,32 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
   await writeReportXlsx(config.xlsxReportPath, report, unmatched, config.expiresDays);
 
   // 8) DB
-  const runAt = new Date().toISOString();
-  const runId = saveRun(db, {
-    run_at: runAt,
-    total_products: report.length,
-    deficit_products: report.filter((r) => r.risk === "DEFICIT").length,
-    expiring_products: report.filter((r) => r.expires_soon === "YES").length,
-    unmatched_installs: unmatched.length,
-  });
-
-  saveResults(db, runId, report);
-  saveUnmatchedRows(db, runId, unmatched);
-
-  deleteUnreadAlertsByType(db, ["deficit", "expiring", "unmatched"]);
-
   const deficitCount = report.filter((r) => r.risk === "DEFICIT").length;
   const expiringCount = report.filter((r) => r.expires_soon === "YES").length;
   const unmatchedCount = unmatched.length;
+
+  const runAt = new Date().toISOString();
+
+  const saveRunTransaction = db.transaction(() => {
+    const nextRunId = saveRun(db, {
+      run_at: runAt,
+      total_products: report.length,
+      deficit_products: deficitCount,
+      expiring_products: expiringCount,
+      unmatched_installs: unmatchedCount,
+    });
+
+    saveResults(db, nextRunId, report);
+    saveUnmatchedRows(db, nextRunId, unmatched);
+
+    return nextRunId;
+  });
+
+  const runId = saveRunTransaction();
+
+  // Не удаляем старые уведомления автоматически.
+  // Иначе пользователь теряет историю проблем между запусками.
+  // deleteUnreadAlertsByType(db, ["deficit", "expiring", "unmatched"]);
 
   if (deficitCount > 0) {
     createAlert(db, {

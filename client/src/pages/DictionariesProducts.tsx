@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Boxes,
   Search,
@@ -7,7 +8,8 @@ import {
   Tags,
   RefreshCw,
   AlertTriangle,
-  PackageSearch,
+  X,
+  Play,
 } from "lucide-react";
 
 import { Card } from "../ui/Card";
@@ -22,6 +24,7 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  runCheck,
   type ProductRow,
 } from "../api";
 import {
@@ -39,7 +42,6 @@ import {
 
 function formatDate(value?: string | null) {
   if (!value) return "—";
-
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return value;
 
@@ -64,22 +66,169 @@ function MiniStat({
   tone?: "ok" | "warn" | "bad" | "none";
   icon?: React.ReactNode;
 }) {
-  const cls =
-    tone === "ok"
-      ? "border-emerald-300/20 bg-emerald-500/10 text-emerald-100"
-      : tone === "warn"
-      ? "border-amber-300/20 bg-amber-500/10 text-amber-100"
-      : tone === "bad"
-      ? "border-rose-300/20 bg-rose-500/10 text-rose-100"
-      : "border-white/10 bg-white/[0.03] text-white/80";
-
   return (
-    <div className={cn("rounded-2xl border px-4 py-3", cls)}>
-      <div className="flex items-center gap-2 text-[11px] opacity-80">
+    <div
+      className={cn(
+        "rounded-xl border bg-white p-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)]",
+        tone === "ok" && "border-emerald-200",
+        tone === "warn" && "border-amber-200",
+        tone === "bad" && "border-red-200",
+        tone === "none" && "border-slate-200"
+      )}
+    >
+      <div className="flex items-center gap-2 text-sm text-slate-500">
         {icon}
         <span>{label}</span>
       </div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
+
+      <div
+        className={cn(
+          "mt-1 text-2xl font-semibold tabular-nums",
+          tone === "ok" && "text-emerald-700",
+          tone === "warn" && "text-amber-700",
+          tone === "bad" && "text-red-700",
+          tone === "none" && "text-slate-950"
+        )}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={cn(
+        "w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none",
+        "placeholder:text-slate-400 focus:border-slate-600 focus:ring-2 focus:ring-slate-100",
+        props.className
+      )}
+    />
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <div className="mb-1 text-xs font-medium text-slate-500">{children}</div>;
+}
+
+function ProductModal({
+  title,
+  description,
+  busy,
+  error,
+  name,
+  vendor,
+  category,
+  onName,
+  onVendor,
+  onCategory,
+  onClose,
+  onSubmit,
+  submitLabel,
+}: {
+  title: string;
+  description: string;
+  busy: boolean;
+  error: string;
+  name: string;
+  vendor: string;
+  category: string;
+  onName: (v: string) => void;
+  onVendor: (v: string) => void;
+  onCategory: (v: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+  submitLabel: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9990]">
+      <button
+        type="button"
+        aria-label="Закрыть окно"
+        onClick={onClose}
+        className="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]"
+      />
+
+      <div
+        className={cn(
+          "absolute left-1/2 top-1/2 w-[min(640px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2",
+          "rounded-2xl border border-slate-300 bg-white p-5 shadow-[0_18px_60px_rgba(15,23,42,0.24)]"
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Справочник продуктов
+            </div>
+
+            <div className="mt-1 text-lg font-semibold text-slate-950">
+              {title}
+            </div>
+
+            <div className="mt-2 text-sm leading-6 text-slate-600">
+              {description}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-950 disabled:opacity-50"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4">
+          <div>
+            <FieldLabel>Название</FieldLabel>
+            <TextInput
+              value={name}
+              onChange={(e) => onName(e.target.value)}
+              placeholder="Например: JetBrains IntelliJ IDEA"
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <FieldLabel>Вендор</FieldLabel>
+              <TextInput
+                value={vendor}
+                onChange={(e) => onVendor(e.target.value)}
+                placeholder="Например: JetBrains"
+              />
+            </div>
+
+            <div>
+              <FieldLabel>Категория</FieldLabel>
+              <TextInput
+                value={category}
+                onChange={(e) => onCategory(e.target.value)}
+                placeholder="Например: IDE"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <Button variant="ghost" size="sm" disabled={busy} onClick={onClose}>
+            Отмена
+          </Button>
+
+          <Button size="sm" disabled={busy} onClick={onSubmit}>
+            {busy ? "Сохранение..." : submitLabel}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -88,6 +237,11 @@ export default function DictionariesProducts() {
   const { user } = useAuth();
   const { push } = useToast();
   const canManage = user?.role === "admin";
+
+  const navigate = useNavigate();
+
+  const [productsChanged, setProductsChanged] = useState(false);
+  const [runBusy, setRunBusy] = useState(false);
 
   const [items, setItems] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,6 +267,49 @@ export default function DictionariesProducts() {
 
   const [deleteBusy, setDeleteBusy] = useState(false);
   const confirmDelete = useConfirmDialog();
+
+  async function runCheckAndOpen() {
+    if (!canManage) return;
+
+    setRunBusy(true);
+    setError("");
+
+    try {
+      const out = await runCheck();
+
+      if (!out.ok) {
+        throw new Error(out.error || "Не удалось запустить проверку");
+      }
+
+      setProductsChanged(false);
+      window.dispatchEvent(new CustomEvent("alerts:refresh"));
+
+      if (out.runId) {
+        push({
+          tone: "success",
+          title: "Проверка завершена",
+          message: `Открываю новый запуск #${out.runId}.`,
+        });
+
+        navigate(`/runs/${out.runId}`);
+        return;
+      }
+
+      navigate("/runs");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+
+      setError(msg);
+
+      push({
+        tone: "error",
+        title: "Ошибка проверки",
+        message: msg,
+      });
+    } finally {
+      setRunBusy(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -166,7 +363,7 @@ export default function DictionariesProducts() {
     const category = newCategory.trim();
 
     if (!name) {
-      setCreateError("Укажи название продукта.");
+      setCreateError("Укажите название продукта.");
       return;
     }
 
@@ -182,11 +379,16 @@ export default function DictionariesProducts() {
 
       setCreateOpen(false);
       await load();
+      setProductsChanged(true);
 
       push({
         tone: "success",
         title: "Продукт создан",
-        message: `Добавлен продукт "${name}".`,
+        message: `Добавлен продукт "${name}". Для применения в результатах запустите проверку.`,
+        action: {
+          label: "Запустить",
+          onClick: () => void runCheckAndOpen(),
+        },
       });
     } catch (e) {
       setCreateError(
@@ -205,7 +407,7 @@ export default function DictionariesProducts() {
     const category = editCategory.trim();
 
     if (!name) {
-      setEditError("Укажи название продукта.");
+      setEditError("Укажите название продукта.");
       return;
     }
 
@@ -222,11 +424,16 @@ export default function DictionariesProducts() {
       setEditOpen(false);
       setEditingProduct(null);
       await load();
+      setProductsChanged(true);
 
       push({
         tone: "success",
         title: "Изменения сохранены",
-        message: `Продукт "${name}" успешно обновлён.`,
+        message: `Продукт "${name}" обновлён. Для применения изменений запустите проверку.`,
+        action: {
+          label: "Запустить",
+          onClick: () => void runCheckAndOpen(),
+        },
       });
     } catch (e) {
       setEditError(
@@ -253,11 +460,16 @@ export default function DictionariesProducts() {
     try {
       await deleteProduct(product.id);
       await load();
+      setProductsChanged(true);
 
       push({
         tone: "success",
         title: "Продукт удалён",
-        message: `Продукт "${product.name}" успешно удалён.`,
+        message: `Продукт "${product.name}" удалён. Для обновления результатов запустите проверку.`,
+        action: {
+          label: "Запустить",
+          onClick: () => void runCheckAndOpen(),
+        },
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не удалось удалить продукт");
@@ -289,11 +501,25 @@ export default function DictionariesProducts() {
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog
+        open={confirmDelete.open}
+        title={confirmDelete.cfg.title}
+        description={confirmDelete.cfg.description}
+        confirmLabel={confirmDelete.cfg.confirmLabel}
+        cancelLabel={confirmDelete.cfg.cancelLabel}
+        danger={confirmDelete.cfg.danger}
+        requireText={confirmDelete.cfg.requireText}
+        value={confirmDelete.value}
+        onValueChange={confirmDelete.setValue}
+        busy={deleteBusy}
+        onCancel={confirmDelete.cancel}
+        onConfirm={confirmDelete.confirm}
+      />
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         <MiniStat
           label="Продукты"
           value={loading ? 0 : items.length}
-          tone="none"
           icon={<Boxes className="h-4 w-4" />}
         />
         <MiniStat
@@ -310,33 +536,58 @@ export default function DictionariesProducts() {
         />
       </div>
 
-      <Card
-        className={cn(
-          "rounded-3xl p-4",
-          "border border-white/[0.08]",
-          "bg-white/[0.02]"
-        )}
-      >
+      {canManage && productsChanged && (
+        <Card className="border-amber-200 bg-amber-50 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-amber-900">
+                Справочник продуктов изменён
+              </div>
+
+              <div className="mt-1 text-xs text-amber-700">
+                Продукты используются в правилах сопоставления и результатах мониторинга.
+                Чтобы изменения отразились в новых расчётах, запустите проверку.
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={() => void runCheckAndOpen()}
+                disabled={runBusy}
+              >
+                <Play className="h-4 w-4" />
+                {runBusy ? "Запуск..." : "Запустить проверку"}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setProductsChanged(false)}
+              >
+                Скрыть
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      <Card className="p-4">
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 text-white/70">
+          <div className="flex items-center gap-2 text-slate-700">
             <Search className="h-4 w-4" />
             <div className="text-sm font-semibold">Поиск и действия</div>
           </div>
 
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_auto]">
-            <div
-              className={cn(
-                "flex items-center gap-2 rounded-2xl px-3.5 py-2",
-                "bg-white/[0.03] border border-white/[0.08]",
-                "focus-within:border-cyan-200/30 focus-within:shadow-[0_0_0_4px_rgba(34,211,238,0.10)]"
-              )}
-            >
-              <Search className="h-4 w-4 shrink-0 text-white/45" />
+            <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 focus-within:border-slate-600 focus-within:ring-2 focus-within:ring-slate-100">
+              <Search className="h-4 w-4 shrink-0 text-slate-400" />
+
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Поиск по названию, вендору или категории…"
-                className="w-full min-w-0 bg-transparent outline-none text-sm text-white/85 placeholder:text-white/35"
+                placeholder="Поиск по названию, вендору или категории..."
+                className="w-full min-w-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
               />
             </div>
 
@@ -346,7 +597,7 @@ export default function DictionariesProducts() {
                 onClick={() => void load()}
                 className="inline-flex items-center gap-2"
               >
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
                 <span>Обновить</span>
               </Button>
 
@@ -362,29 +613,29 @@ export default function DictionariesProducts() {
             </div>
           </div>
 
-          <div className="text-[12px] text-white/45">
+          <div className="text-xs text-slate-500">
             Показано:{" "}
-            <span className="font-semibold text-white/70">{filtered.length}</span>{" "}
-            из <span className="font-semibold text-white/70">{items.length}</span>
+            <span className="font-semibold text-slate-900">{filtered.length}</span>{" "}
+            из <span className="font-semibold text-slate-900">{items.length}</span>
           </div>
         </div>
       </Card>
 
       {error && (
-        <div className="flex items-start gap-3 rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100/90">
+        <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>{error}</div>
         </div>
       )}
 
-      <Card className="p-0 rounded-3xl overflow-hidden border border-white/[0.08] bg-white/[0.02]">
+      <Card className="overflow-hidden">
         <Table>
           <TableCaption
             title="Справочник продуктов"
-            description="Канонические продукты, используемые в правилах сопоставления и других частях системы."
+            description="Канонические продукты, используемые в правилах сопоставления и расчёте лицензий."
             right={
-              <div className="text-[11px] text-white/45">
-                {loading ? "Загружаю…" : `Показано: ${filtered.length} / ${items.length}`}
+              <div className="text-xs text-slate-500">
+                {loading ? "Загрузка..." : `Показано: ${filtered.length} / ${items.length}`}
               </div>
             }
           />
@@ -401,7 +652,7 @@ export default function DictionariesProducts() {
               description={
                 items.length === 0
                   ? "После добавления продуктов они появятся в этой таблице."
-                  : "Попробуй изменить строку поиска."
+                  : "Попробуйте изменить строку поиска."
               }
             />
           ) : (
@@ -409,22 +660,22 @@ export default function DictionariesProducts() {
               <TableInner stickyHeader density="comfortable">
                 <THead>
                   <tr>
-                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">
                       Название
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">
                       Вендор
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">
                       Категория
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">
                       Создан
                     </th>
-                    <th className="px-4 py-3 text-left font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600">
                       Обновлён
                     </th>
-                    <th className="px-4 py-3 text-right font-medium text-white/55">
+                    <th className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-right font-semibold text-slate-600">
                       Действия
                     </th>
                   </tr>
@@ -433,19 +684,19 @@ export default function DictionariesProducts() {
                 <TBody>
                   {filtered.map((item) => (
                     <Tr key={item.id}>
-                      <Td className="font-semibold text-white/88">
+                      <Td className="font-semibold text-slate-900">
                         {item.name}
                       </Td>
 
-                      <Td className="text-white/65">{item.vendor || "—"}</Td>
+                      <Td className="text-slate-700">{item.vendor || "—"}</Td>
 
-                      <Td className="text-white/65">{item.category || "—"}</Td>
+                      <Td className="text-slate-700">{item.category || "—"}</Td>
 
-                      <Td className="text-white/55">
+                      <Td className="text-slate-500">
                         {formatDate(item.created_at)}
                       </Td>
 
-                      <Td className="text-white/55">
+                      <Td className="text-slate-500">
                         {formatDate(item.updated_at)}
                       </Td>
 
@@ -471,7 +722,7 @@ export default function DictionariesProducts() {
                               </Button>
                             </>
                           ) : (
-                            <span className="text-xs text-white/35">
+                            <span className="text-xs text-slate-400">
                               Только просмотр
                             </span>
                           )}
@@ -487,255 +738,40 @@ export default function DictionariesProducts() {
       </Card>
 
       {createOpen && (
-        <div className="fixed inset-0 z-[9990]">
-          <button
-            type="button"
-            aria-label="Close modal"
-            onClick={closeCreateModal}
-            className="absolute inset-0 bg-black/60 bg-[radial-gradient(1200px_600px_at_50%_20%,rgba(0,255,255,0.08),transparent_55%),radial-gradient(900px_500px_at_20%_80%,rgba(255,0,128,0.06),transparent_55%)] backdrop-blur-[2px]"
-          />
-
-          <div
-            className={cn(
-              "absolute left-1/2 top-1/2 w-[min(640px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2",
-              "rounded-[28px] border border-white/10 bg-[rgb(var(--panel))]/98",
-              "shadow-[0_30px_90px_rgba(0,0,0,0.60)] p-5"
-            )}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-[11px] text-white/55">Product</div>
-                <div className="mt-1 text-lg font-semibold text-white/90">
-                  Добавить продукт
-                </div>
-                <div className="mt-2 text-sm text-white/60">
-                  Новый продукт появится в справочнике и сможет использоваться
-                  в правилах сопоставления.
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeCreateModal}
-                disabled={createBusy}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.06] hover:text-white/90 disabled:opacity-50"
-              >
-                Закрыть
-              </button>
-            </div>
-
-            <div className="mt-5 grid gap-4">
-              <div>
-                <div className="mb-2 text-xs font-medium text-white/55">
-                  Название
-                </div>
-                <input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Например: JetBrains IntelliJ IDEA"
-                  className={cn(
-                    "w-full rounded-2xl border border-white/10 bg-black/25",
-                    "px-3 py-2.5 text-sm text-white/85 outline-none",
-                    "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                  )}
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <div className="mb-2 text-xs font-medium text-white/55">
-                    Вендор
-                  </div>
-                  <input
-                    value={newVendor}
-                    onChange={(e) => setNewVendor(e.target.value)}
-                    placeholder="Например: JetBrains"
-                    className={cn(
-                      "w-full rounded-2xl border border-white/10 bg-black/25",
-                      "px-3 py-2.5 text-sm text-white/85 outline-none",
-                      "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <div className="mb-2 text-xs font-medium text-white/55">
-                    Категория
-                  </div>
-                  <input
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder="Например: IDE"
-                    className={cn(
-                      "w-full rounded-2xl border border-white/10 bg-black/25",
-                      "px-3 py-2.5 text-sm text-white/85 outline-none",
-                      "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                    )}
-                  />
-                </div>
-              </div>
-
-              {createError && (
-                <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100/90">
-                  {createError}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={createBusy}
-                onClick={closeCreateModal}
-              >
-                Отмена
-              </Button>
-
-              <Button
-                size="sm"
-                disabled={createBusy}
-                onClick={() => void handleCreateProduct()}
-              >
-                {createBusy ? "Создание..." : "Создать продукт"}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <ProductModal
+          title="Добавить продукт"
+          description="Новый продукт появится в справочнике и сможет использоваться в правилах сопоставления."
+          busy={createBusy}
+          error={createError}
+          name={newName}
+          vendor={newVendor}
+          category={newCategory}
+          onName={setNewName}
+          onVendor={setNewVendor}
+          onCategory={setNewCategory}
+          onClose={closeCreateModal}
+          onSubmit={() => void handleCreateProduct()}
+          submitLabel="Создать продукт"
+        />
       )}
 
       {editOpen && editingProduct && (
-        <div className="fixed inset-0 z-[9990]">
-          <button
-            type="button"
-            aria-label="Close modal"
-            onClick={closeEditModal}
-            className="absolute inset-0 bg-black/60 bg-[radial-gradient(1200px_600px_at_50%_20%,rgba(0,255,255,0.08),transparent_55%),radial-gradient(900px_500px_at_20%_80%,rgba(255,0,128,0.06),transparent_55%)] backdrop-blur-[2px]"
-          />
-
-          <div
-            className={cn(
-              "absolute left-1/2 top-1/2 w-[min(640px,calc(100vw-24px))] -translate-x-1/2 -translate-y-1/2",
-              "rounded-[28px] border border-white/10 bg-[rgb(var(--panel))]/98",
-              "shadow-[0_30px_90px_rgba(0,0,0,0.60)] p-5"
-            )}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-[11px] text-white/55">Product</div>
-                <div className="mt-1 text-lg font-semibold text-white/90">
-                  Редактировать продукт
-                </div>
-                <div className="mt-2 text-sm text-white/60">
-                  Обнови свойства продукта в справочнике.
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={closeEditModal}
-                disabled={editBusy}
-                className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/70 transition hover:bg-white/[0.06] hover:text-white/90 disabled:opacity-50"
-              >
-                Закрыть
-              </button>
-            </div>
-
-            <div className="mt-5 grid gap-4">
-              <div>
-                <div className="mb-2 text-xs font-medium text-white/55">
-                  Название
-                </div>
-                <input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Например: JetBrains IntelliJ IDEA"
-                  className={cn(
-                    "w-full rounded-2xl border border-white/10 bg-black/25",
-                    "px-3 py-2.5 text-sm text-white/85 outline-none",
-                    "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                  )}
-                />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <div className="mb-2 text-xs font-medium text-white/55">
-                    Вендор
-                  </div>
-                  <input
-                    value={editVendor}
-                    onChange={(e) => setEditVendor(e.target.value)}
-                    placeholder="Например: JetBrains"
-                    className={cn(
-                      "w-full rounded-2xl border border-white/10 bg-black/25",
-                      "px-3 py-2.5 text-sm text-white/85 outline-none",
-                      "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                    )}
-                  />
-                </div>
-
-                <div>
-                  <div className="mb-2 text-xs font-medium text-white/55">
-                    Категория
-                  </div>
-                  <input
-                    value={editCategory}
-                    onChange={(e) => setEditCategory(e.target.value)}
-                    placeholder="Например: IDE"
-                    className={cn(
-                      "w-full rounded-2xl border border-white/10 bg-black/25",
-                      "px-3 py-2.5 text-sm text-white/85 outline-none",
-                      "focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"
-                    )}
-                  />
-                </div>
-              </div>
-
-              {editError && (
-                <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100/90">
-                  {editError}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={editBusy}
-                onClick={closeEditModal}
-              >
-                Отмена
-              </Button>
-
-              <Button
-                size="sm"
-                disabled={editBusy}
-                onClick={() => void handleUpdateProduct()}
-              >
-                {editBusy ? "Сохранение..." : "Сохранить изменения"}
-              </Button>
-            </div>
-          </div>
-        </div>
+        <ProductModal
+          title="Редактировать продукт"
+          description="Обновите свойства продукта в справочнике."
+          busy={editBusy}
+          error={editError}
+          name={editName}
+          vendor={editVendor}
+          category={editCategory}
+          onName={setEditName}
+          onVendor={setEditVendor}
+          onCategory={setEditCategory}
+          onClose={closeEditModal}
+          onSubmit={() => void handleUpdateProduct()}
+          submitLabel="Сохранить изменения"
+        />
       )}
-
-      <ConfirmDialog
-        open={confirmDelete.open}
-        title={confirmDelete.cfg.title}
-        description={confirmDelete.cfg.description}
-        confirmLabel={confirmDelete.cfg.confirmLabel}
-        cancelLabel={confirmDelete.cfg.cancelLabel}
-        danger={confirmDelete.cfg.danger}
-        requireText={confirmDelete.cfg.requireText}
-        value={confirmDelete.value}
-        onValueChange={confirmDelete.setValue}
-        busy={deleteBusy}
-        onCancel={confirmDelete.cancel}
-        onConfirm={confirmDelete.confirm}
-        panelClassName="bg-[rgb(var(--panel))]/98"
-      />
     </div>
   );
 }

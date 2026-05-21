@@ -1,3 +1,5 @@
+import "dotenv/config";
+import rateLimit from "express-rate-limit";
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import multer from "multer";
@@ -220,7 +222,7 @@ async function main() {
   // ---------------- sessions ----------------
   app.use(
     session({
-      secret: "change-me-super-secret", // лучше вынести в env
+      secret: process.env.SESSION_SECRET || "dev-only-change-me",
       resave: false,
       saveUninitialized: false,
       cookie: {
@@ -230,6 +232,23 @@ async function main() {
       },
     })
   );
+
+  const authLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  const licenseLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  app.use("/api/auth/login", authLimiter);
+  app.use("/api/license", licenseLimiter);
 
   // ---------------- AUTH ----------------
   app.get("/api/auth/me", (req: AuthedReq, res: Response) => {
@@ -1139,7 +1158,7 @@ async function main() {
 
   // ---------------- FRONT (Vite внутри Express) ----------------
 
-  const port = 3000;
+  const port = Number(process.env.PORT) || 3000;
   app.listen(port, () => {
     console.log(`OK: сервер поднят -> http://localhost:${port}`);
     console.log("AUTH:");

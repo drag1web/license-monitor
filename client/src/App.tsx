@@ -19,7 +19,6 @@ import { useAuth } from "./auth/AuthContext";
 
 import { AppLayout } from "./AppLayout";
 import { PageHeader } from "./components/PageHeader";
-import { Button } from "./ui/Button";
 
 function ProtectedShell({
   title,
