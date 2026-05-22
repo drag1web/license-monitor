@@ -151,7 +151,9 @@ function createWindow() {
   mainWindow.loadURL("http://127.0.0.1:5174");
 
   mainWindow.on("close", (event) => {
-    if (forceQuit) return;
+    if (forceQuit || !tray) return;
+
+    console.log("WINDOW HIDE TO TRAY");
 
     event.preventDefault();
     mainWindow.hide();
@@ -161,6 +163,12 @@ function createWindow() {
 function createTray() {
   const iconPath = path.join(__dirname, "icon.ico");
 
+  if (!fs.existsSync(iconPath)) {
+    console.warn("TRAY: icon.ico not found, tray disabled");
+    tray = null;
+    return;
+  }
+
   tray = new Tray(iconPath);
   tray.setToolTip("Entitlex — клиент лицензирования");
 
@@ -168,14 +176,6 @@ function createTray() {
     {
       label: "Открыть Entitlex",
       click: () => {
-        mainWindow?.show();
-        mainWindow?.focus();
-      },
-    },
-    {
-      label: "Проверить лицензию",
-      click: () => {
-        mainWindow?.webContents.send("license:manual-check");
         mainWindow?.show();
         mainWindow?.focus();
       },
@@ -191,6 +191,11 @@ function createTray() {
   ]);
 
   tray.setContextMenu(contextMenu);
+
+  tray.on("click", () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
 
   tray.on("double-click", () => {
     mainWindow?.show();
@@ -294,10 +299,14 @@ ipcMain.handle("license:deactivate", async () => {
 app.whenReady().then(() => {
   createWindow();
   createTray();
+
+  if (!tray) {
+    console.log("APP: tray disabled, window will close normally");
+  }
 });
 
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
+  if (process.platform !== "darwin" && !tray) {
     app.quit();
   }
 });

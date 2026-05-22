@@ -6,7 +6,7 @@ type ProtectedAppOptions = {
 };
 
 export async function runProtectedApp(options: ProtectedAppOptions) {
-  console.log("🚀 Meridian protected app started");
+  console.log("🚀 Entitlex protected app started");
   console.log("");
   console.log("This is a demo protected application.");
   console.log("If you see this message, license validation passed.");

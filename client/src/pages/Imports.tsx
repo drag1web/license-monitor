@@ -30,7 +30,7 @@ import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { Dropdown } from "../components/Dropdown";
 import { useAuth } from "../auth/AuthContext";
-import { ViewerNotice } from "../components/ViewerNotice";
+
 import { cn } from "../ui/cn/cn";
 import {
   Table,
@@ -440,12 +440,6 @@ export default function Imports() {
 
   return (
     <div className="space-y-6">
-      {!isAdmin && (
-        <ViewerNotice
-          className="mb-4"
-          message="У вас нет прав на загрузку CSV, запуск проверки и очистку журнала импортов. Доступен только просмотр."
-        />
-      )}
 
       <Card className="p-5">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
@@ -458,8 +452,7 @@ export default function Imports() {
               <div className="text-xl font-semibold text-slate-950">Импорты</div>
 
               <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                Журнал загрузки исходных CSV-файлов. При запуске проверки эти данные
-                используются pipeline для пересчёта результатов.
+                Журнал загрузки CSV-файлов. Файл установок используется напрямую, а данные лицензий и правил сопоставления после загрузки сохраняются в систему и используются при расчёте.
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-500">
@@ -546,7 +539,13 @@ export default function Imports() {
                     onClick={() => setUploadTypeOpen((v) => !v)}
                     className="inline-flex w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
                   >
-                    <span>{uploadType}</span>
+                    <span>
+                      {uploadType === "installations"
+                        ? "Установки (CSV)"
+                        : uploadType === "licenses"
+                          ? "Импорт в реестр лицензий"
+                          : "Импорт правил сопоставления"}
+                    </span>
                     <span className="text-slate-400">▾</span>
                   </button>
 
@@ -575,7 +574,13 @@ export default function Imports() {
                                 : "text-slate-700 hover:bg-slate-50"
                             )}
                           >
-                            <span>{item}</span>
+                            <span>
+                              {item === "installations"
+                                ? "Установки (CSV)"
+                                : item === "licenses"
+                                  ? "Импорт в реестр лицензий"
+                                  : "Импорт правил сопоставления"}
+                            </span>
                             {uploadType === item ? (
                               <span className="text-slate-500">✓</span>
                             ) : null}
@@ -660,19 +665,19 @@ export default function Imports() {
             <div className="grid gap-3">
               <ImportKindCard
                 title="installations"
-                text="Установки ПО. Формируют потребность в лицензиях."
+                text="Фактические установки ПО. Используются как основной источник данных при расчёте."
                 icon={<FileSpreadsheet className="h-4 w-4 text-slate-500" />}
               />
 
               <ImportKindCard
                 title="licenses"
-                text="Входные данные по доступным лицензиям для расчёта дефицита."
+                text="Импорт данных в реестр лицензий. После загрузки данные сохраняются в систему и используются при расчёте."
                 icon={<ShieldCheck className="h-4 w-4 text-slate-500" />}
               />
 
               <ImportKindCard
                 title="mapping"
-                text="Правила сопоставления названий ПО с каноническими продуктами."
+                text="Импорт правил сопоставления. Загруженные правила сохраняются в справочник и применяются при обработке установок."
                 icon={<GitBranch className="h-4 w-4 text-slate-500" />}
               />
             </div>
@@ -772,10 +777,10 @@ export default function Imports() {
                           onClick={() =>
                             setTypeFilter(
                               item.value as
-                                | "all"
-                                | "installations"
-                                | "licenses"
-                                | "mapping"
+                              | "all"
+                              | "installations"
+                              | "licenses"
+                              | "mapping"
                             )
                           }
                         >
@@ -908,7 +913,13 @@ export default function Imports() {
                           ) : (
                             <FileSpreadsheet className="h-4 w-4 text-slate-500" />
                           )}
-                          <span>{row.import_type}</span>
+                          <span>
+                            {row.import_type === "installations"
+                              ? "Установки"
+                              : row.import_type === "licenses"
+                                ? "Лицензии (в реестр)"
+                                : "Сопоставление"}
+                          </span>
                         </div>
                       </Td>
 

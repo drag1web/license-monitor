@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import type React from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -8,7 +9,6 @@ import {
   Eye,
   EyeOff,
   FileSpreadsheet,
-  KeyRound,
   Loader2,
   Lock,
   Server,
@@ -56,15 +56,17 @@ function Field({
 
       <div
         className={cn(
-          "mt-2 flex items-center gap-2 rounded-lg border bg-white px-3 py-2.5 transition",
+          "mt-2 flex min-h-11 items-center gap-2 rounded-lg border bg-white px-3 py-2.5 transition",
           error
             ? "border-red-300 ring-2 ring-red-100"
             : "border-slate-300 focus-within:border-slate-600 focus-within:ring-2 focus-within:ring-slate-100"
         )}
       >
-        {left && <span className="text-slate-400">{left}</span>}
-        <div className="w-full">{children}</div>
-        {right}
+        {left && <span className="shrink-0 text-slate-400">{left}</span>}
+
+        <div className="min-w-0 flex-1">{children}</div>
+
+        {right && <span className="shrink-0">{right}</span>}
       </div>
 
       {error && <div className="mt-1 text-xs text-red-600">{error}</div>}
@@ -107,7 +109,7 @@ function LoadingOverlay({
   mode: "login" | "register";
 }) {
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/35 px-6 backdrop-blur-sm">
+    <div className="fixed inset-x-0 bottom-0 top-12 z-[100] grid place-items-center bg-slate-950/35 px-6 backdrop-blur-sm">
       <div className="w-full max-w-md rounded-2xl border border-slate-300 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.22)]">
         <div className="flex items-start gap-4">
           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-900 text-white">
@@ -116,7 +118,9 @@ function LoadingOverlay({
 
           <div>
             <div className="text-lg font-semibold text-slate-950">
-              {mode === "login" ? "Выполняется вход" : "Создание учётной записи"}
+              {mode === "login"
+                ? "Выполняется вход"
+                : "Создание учётной записи"}
             </div>
             <div className="mt-1 text-sm leading-6 text-slate-500">
               Подготавливаем рабочую среду License Monitor.
@@ -170,13 +174,60 @@ function LoadingOverlay({
           <div
             className="h-full rounded-full bg-slate-900 transition-all duration-300"
             style={{
-              width: `${Math.min(100, ((activeStep + 1) / BOOT_STEPS.length) * 100)}%`,
+              width: `${Math.min(
+                100,
+                ((activeStep + 1) / BOOT_STEPS.length) * 100
+              )}%`,
             }}
           />
         </div>
       </div>
     </div>
   );
+}
+
+function getPasswordStrength(password: string) {
+  const score = [
+    password.length >= 8,
+    /[A-ZА-Я]/.test(password),
+    /[a-zа-я]/.test(password),
+    /\d/.test(password),
+    /[^A-Za-zА-Яа-я0-9]/.test(password),
+  ].filter(Boolean).length;
+
+  if (!password) {
+    return {
+      label: "Введите пароль",
+      width: "0%",
+      className: "bg-slate-200",
+      textClassName: "text-slate-500",
+    };
+  }
+
+  if (score <= 2) {
+    return {
+      label: "Слабый пароль",
+      width: "33%",
+      className: "bg-red-500",
+      textClassName: "text-red-600",
+    };
+  }
+
+  if (score <= 4) {
+    return {
+      label: "Средний пароль",
+      width: "66%",
+      className: "bg-amber-500",
+      textClassName: "text-amber-600",
+    };
+  }
+
+  return {
+    label: "Надёжный пароль",
+    width: "100%",
+    className: "bg-emerald-500",
+    textClassName: "text-emerald-600",
+  };
 }
 
 export default function Login() {
@@ -194,12 +245,20 @@ export default function Login() {
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
     setFocus,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { login: "admin", password: "admin" },
   });
+
+  const passwordValue = watch("password") ?? "";
+
+  const passwordStrength = useMemo(
+    () => getPasswordStrength(passwordValue),
+    [passwordValue]
+  );
 
   useEffect(() => {
     const saved = localStorage.getItem("lm_login_saved");
@@ -210,7 +269,7 @@ export default function Login() {
     setBooting(true);
     setActiveStep(0);
 
-    for (let i = 0; i < BOOT_STEPS.length; i++) {
+    for (let i = 0; i < BOOT_STEPS.length; i += 1) {
       setActiveStep(i);
       await new Promise((resolve) => setTimeout(resolve, 260));
     }
@@ -248,18 +307,12 @@ export default function Login() {
     }
   }
 
-  function fillAdminDemo() {
-    setValue("login", "admin");
-    setValue("password", "admin");
-    setApiError("");
-  }
-
   return (
-    <div className="min-h-screen bg-slate-200 px-6 py-10 text-slate-950">
+    <div className="flex min-h-full w-full items-center bg-slate-200 px-6 py-10 text-slate-950">
       {booting && <LoadingOverlay activeStep={activeStep} mode={mode} />}
 
-      <div className="mx-auto grid min-h-[calc(100vh-80px)] w-full max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="space-y-5">
+      <div className="mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-[1fr_0.9fr]">
+        <section className="w-full max-w-2xl space-y-5">
           <div>
             <div className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm">
               <ShieldCheck className="h-4 w-4 text-slate-500" />
@@ -300,7 +353,7 @@ export default function Login() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-300 bg-white p-6 shadow-[0_8px_28px_rgba(15,23,42,0.10)]">
+        <section className="w-full max-w-lg justify-self-end rounded-2xl border border-slate-300 bg-white p-7 shadow-[0_8px_28px_rgba(15,23,42,0.10)]">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-sm text-slate-500">Добро пожаловать</div>
@@ -373,9 +426,16 @@ export default function Login() {
                 {...register("login", {
                   onChange: () => apiError && setApiError(""),
                 })}
-                className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                className="block w-full !appearance-none !border-0 !bg-transparent !p-0 text-sm leading-6 text-slate-900 !shadow-none !outline-none !ring-0 placeholder:text-slate-400 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
+                style={{
+                  border: "0",
+                  outline: "none",
+                  boxShadow: "none",
+                  background: "transparent",
+                }}
                 placeholder="admin"
                 autoComplete="username"
+                spellCheck={false}
               />
             </Field>
 
@@ -390,7 +450,11 @@ export default function Login() {
                   className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                   title={show ? "Скрыть" : "Показать"}
                 >
-                  {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {show ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
               }
             >
@@ -398,14 +462,47 @@ export default function Login() {
                 {...register("password", {
                   onChange: () => apiError && setApiError(""),
                 })}
-                type={show ? "text" : "password"}
-                className="w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                type="text"
+                className="block w-full !appearance-none !border-0 !bg-transparent !p-0 text-sm leading-6 text-slate-900 !shadow-none !outline-none !ring-0 placeholder:text-slate-400 focus:!border-0 focus:!shadow-none focus:!outline-none focus:!ring-0"
+                style={
+                  {
+                    WebkitTextSecurity: show ? "none" : "disc",
+                    border: "0",
+                    outline: "none",
+                    boxShadow: "none",
+                    background: "transparent",
+                  } as React.CSSProperties
+                }
                 placeholder="••••••••"
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
+                spellCheck={false}
               />
             </Field>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {mode === "register" && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-medium text-slate-600">
+                    Сложность пароля
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {passwordStrength.label}
+                  </span>
+                </div>
+
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all duration-300",
+                      passwordStrength.className
+                    )}
+                    style={{ width: passwordStrength.width }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
               <label className="inline-flex items-center gap-2 text-sm text-slate-600">
                 <input
                   type="checkbox"
@@ -415,15 +512,6 @@ export default function Login() {
                 />
                 Запомнить логин
               </label>
-
-              <button
-                type="button"
-                onClick={fillAdminDemo}
-                className="inline-flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-slate-950"
-              >
-                <KeyRound className="h-4 w-4" />
-                Заполнить demo-доступ
-              </button>
             </div>
 
             <button
@@ -446,7 +534,7 @@ export default function Login() {
 
           <div className="mt-6 flex items-center justify-between border-t border-slate-200 pt-4 text-xs text-slate-500">
             <span>Electron + Express + SQLite</span>
-            <span className="font-mono">admin / admin</span>
+            <span>локальная авторизация</span>
           </div>
         </section>
       </div>

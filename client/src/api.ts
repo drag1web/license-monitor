@@ -135,6 +135,17 @@ export type UnmatchedRow = {
   detected_at: string | null;
   reason: string;
 };
+
+export type AdminAuditLogRow = {
+  id: number;
+  user_id: number | null;
+  login: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  message: string | null;
+  created_at: string;
+};
 /* ------------------------------------------
  * HTTP helper (sessions-safe)
  * ------------------------------------------ */
@@ -357,6 +368,12 @@ export async function uploadImport(
   });
 }
 
+export function getAdminAuditLog(limit = 200): Promise<AdminAuditLogRow[]> {
+  return j<AdminAuditLogRow[]>(
+    `/api/admin-audit-log?limit=${encodeURIComponent(String(limit))}`
+  );
+}
+
 /* ------------------------------------------
  * Downloads (HTTP)
  * ------------------------------------------ */
@@ -367,7 +384,57 @@ export const download = {
   runsCsv: "/download/runs.csv",
   unmatchedCsv: "/download/unmatched.csv",
   badRowsCsv: "/download/bad_rows.csv",
+  databaseBackup: "/api/admin/backup/database",
 } as const;
+
+function getFilenameFromDisposition(disposition: string | null, fallback: string) {
+  if (!disposition) return fallback;
+
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const normalMatch = disposition.match(/filename="?([^"]+)"?/i);
+  if (normalMatch?.[1]) {
+    return normalMatch[1];
+  }
+
+  return fallback;
+}
+
+export async function downloadProtectedFile(url: string, fallbackName: string) {
+  const res = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Download failed: HTTP ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const filename = getFilenameFromDisposition(
+    res.headers.get("Content-Disposition"),
+    fallbackName
+  );
+
+  const objectUrl = URL.createObjectURL(blob);
+
+  try {
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    a.style.display = "none";
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 /* ------------------------------------------
  * Server-side client licensing API (HTTP)
@@ -541,6 +608,20 @@ export function changePassword(currentPassword: string, newPassword: string) {
 
 export function logout() {
   return j<{ ok: boolean }>("/api/auth/logout", { method: "POST" });
+}
+
+export async function cleanupOldAlerts(days: number) {
+  const res = await fetch("/api/alerts/cleanup/older-than", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ days }),
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to cleanup alerts");
+  }
+
+  return res.json() as Promise<{ deleted: number }>;
 }
 
 /* ------------------------------------------

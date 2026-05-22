@@ -11,7 +11,6 @@ import {
   saveUnmatchedRows,
   createImportLog,
   createAlert,
-  deleteUnreadAlertsByType,
   listMappingRules,
   listLicensesRegistry,
 } from "../db/database.js";
@@ -31,12 +30,6 @@ export type Config = {
 
   expiresDays: number;
   legacyLicensesJsonPath?: string;
-};
-
-type CsvMappingRow = {
-  pattern: string;
-  canonical_product: string;
-  match_type?: string | null;
 };
 
 function registryToPipelineLicenses(
@@ -145,42 +138,22 @@ export async function runPipeline(config: Config): Promise<{ runId: number }> {
     );
   }
 
-  // 4) mapping: CSV + DB rules
-  let mappingRows: CsvMappingRow[] = [];
-
-  try {
-    mappingRows = await readCsv<CsvMappingRow>(config.mappingPath);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-
-    createImportLog(db, {
-      import_type: "mapping",
-      file_name: "mapping.csv",
-      source_path: config.mappingPath,
-      rows_count: 0,
-      status: "failed",
-      comment: `csv read error: ${msg}`,
-    });
-
-    throw e;
-  }
-
+  // 4) mapping rules from DB
   const dbMappingRows = listMappingRules(db).map((r) => ({
     pattern: r.pattern,
     canonical_product: r.canonical_product,
     match_type: r.match_type,
   }));
 
-  const mergedMappingRows = [...dbMappingRows, ...mappingRows];
-  const rules = buildRules(mergedMappingRows);
+  const rules = buildRules(dbMappingRows);
 
   createImportLog(db, {
     import_type: "mapping",
-    file_name: "mapping.csv",
-    source_path: config.mappingPath,
-    rows_count: mappingRows.length,
+    file_name: "mapping_rules",
+    source_path: "sqlite:mapping_rules",
+    rows_count: dbMappingRows.length,
     status: "success",
-    comment: `csv rules: ${mappingRows.length}, db rules: ${dbMappingRows.length}, merged: ${mergedMappingRows.length}`,
+    comment: `loaded from mapping_rules: ${dbMappingRows.length}`,
   });
 
   // 5) report

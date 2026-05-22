@@ -171,7 +171,17 @@ export function LicenseTable({
               disableEffectsWhileScroll && "data-[scrolling=1]:[&_tr]:transition-none"
             )}
           >
-            <TableInner stickyHeader={stickyHeader} density={density}>
+            <TableInner stickyHeader={stickyHeader} density={density} fixedLayout>
+              <colgroup>
+                {selectMode && <col className="w-[72px]" />}
+                <col className="w-[25%]" />
+                {showVendor && <col className="w-[13%]" />}
+                {showType && <col className="w-[11%]" />}
+                <col className="w-[220px]" />
+                <col className="w-[120px]" />
+                <col className="w-[120px]" />
+                <col className="w-[136px]" />
+              </colgroup>
               <THead>
                 <tr>
                   {selectMode && (
@@ -232,7 +242,7 @@ export function LicenseTable({
                     onToggle={() => onToggleSort("status")}
                   />
 
-                  <th className="border-b border-slate-200 bg-slate-50 px-3 py-3 text-right text-xs font-semibold text-slate-600">
+                  <th className="border-b border-slate-200 bg-slate-50 py-3 pl-3 pr-5 text-right text-xs font-semibold text-slate-600">
                     Действия
                   </th>
                 </tr>

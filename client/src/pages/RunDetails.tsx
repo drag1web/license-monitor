@@ -15,7 +15,7 @@ import {
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { useAuth } from "../auth/AuthContext";
-import { ViewerNotice } from "../components/ViewerNotice";
+
 import { useToast } from "../ui/toast";
 import { Dropdown } from "../components/Dropdown";
 import { cn } from "../ui/cn/cn";
@@ -180,7 +180,7 @@ function riskPill(risk: DerivedRisk) {
 
   if (risk === "medium") {
     return {
-      label: "Средний",
+      label: "Требует внимания",
       cls: "border-amber-200 bg-amber-50 text-amber-700",
       icon: <TriangleAlert className="h-4 w-4" />,
     };
@@ -746,7 +746,7 @@ export default function RunDetails() {
     headlineTone === "bad"
       ? "В этом запуске обнаружены дефициты или другие критичные позиции. Проверьте строки с высоким риском."
       : headlineTone === "warn"
-        ? "Есть позиции, требующие внимания: истекающие лицензии или средний риск."
+        ? "Есть позиции, требующие внимания: истекающие лицензии или недостаток лицензий."
         : headlineTone === "ok"
           ? "Критичных проблем не найдено."
           : "Для этого запуска пока нет результатов.";
@@ -764,10 +764,6 @@ export default function RunDetails() {
 
   return (
     <div className="space-y-6">
-      {!isAdmin && (
-        <ViewerNotice message="У вас нет прав на изменение данных. Доступен только просмотр результатов запуска." />
-      )}
-
       <Card className="p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex min-w-0 gap-4">
@@ -912,7 +908,7 @@ export default function RunDetails() {
         />
 
         <StatCard
-          label="Предупреждения"
+          label="Требует внимания"
           value={formatInt(stats.med)}
           hint="Истекающие лицензии"
           tone={stats.med > 0 ? "warn" : "ok"}
@@ -926,7 +922,7 @@ export default function RunDetails() {
         />
 
         <StatCard
-          label="Суммарная дельта"
+          label="Баланс лицензий"
           value={formatInt(stats.sumDelta)}
           hint="Потребность − лицензии"
           tone={stats.sumDelta > 0 ? "bad" : stats.sumDelta < 0 ? "ok" : "none"}
@@ -1343,14 +1339,18 @@ export default function RunDetails() {
                           )}
                           title="Потребность − лицензии"
                         >
-                          {formatInt(delta)}
+                          {delta > 0
+                            ? `Дефицит: ${formatInt(delta)}`
+                            : delta < 0
+                              ? `Избыток: ${formatInt(Math.abs(delta))}`
+                              : "Баланс"}
                         </Td>
 
                         <Td className="whitespace-nowrap">
                           {expSoon ? (
                             <span className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
                               <TimerReset className="h-4 w-4" />
-                              Да
+                              Истекает скоро
                             </span>
                           ) : (
                             <span className="text-slate-400">—</span>

@@ -13,6 +13,7 @@ const BREAD_MAP: Record<string, string> = {
   dictionaries: "Справочники",
   products: "Продукты",
   mapping: "Правила сопоставления",
+  "admin-audit-log": "Журнал действий",
   "client-licenses": "Клиентские ключи",
 };
 

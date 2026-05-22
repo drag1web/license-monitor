@@ -35,7 +35,7 @@ export function TableScroll({
   className,
   ...p
 }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("overflow-auto", className)} {...p} />;
+  return <div className={cn("w-full overflow-y-auto overflow-x-hidden", className)} {...p} />;
 }
 
 type TableInnerProps = React.TableHTMLAttributes<HTMLTableElement> & {

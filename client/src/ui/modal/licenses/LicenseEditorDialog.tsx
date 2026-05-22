@@ -242,7 +242,7 @@ export function LicenseEditorDialog({
                   />
                 </Field>
 
-                <Field label="Производитель">
+                <Field label="Производитель" hint="Название производителя продукта">
                   <input
                     value={draft.vendor}
                     onChange={(e) =>
@@ -332,19 +332,23 @@ export function LicenseEditorDialog({
                   />
                 </Field>
 
-                <Field
-                  label="Дата окончания"
-                  hint={`YYYY-MM-DD${expiresInfo ? ` · ${expiresInfo}` : ""}`}
-                >
-                  <input
-                    value={draft.expires_at}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, expires_at: e.target.value }))
-                    }
-                    className={inputClass}
-                    placeholder="2026-02-01"
-                  />
-                </Field>
+                <div className="md:col-span-2 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field
+                    label="Дата окончания"
+                    hint={`YYYY-MM-DD${expiresInfo ? ` · ${expiresInfo}` : ""}`}
+                  >
+                    <input
+                      value={draft.expires_at}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, expires_at: e.target.value }))
+                      }
+                      className={inputClass}
+                      placeholder="2026-02-01"
+                    />
+                  </Field>
+
+                  <div className="hidden md:block" />
+                </div>
 
                 <div className="md:col-span-2">
                   <Field label="Примечание" hint="Пояснение риска или комментарий администратора">

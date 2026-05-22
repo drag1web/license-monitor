@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   download,
+  downloadProtectedFile,
   getRuns,
   runCheck,
   type RunRow,
@@ -10,7 +11,7 @@ import {
 import { Card } from "../ui/Card";
 import { cn } from "../ui/cn/cn";
 import { useToast } from "../ui/toast";
-import { ViewerNotice } from "../components/ViewerNotice";
+
 import { useAuth } from "../auth/AuthContext";
 import {
   Table,
@@ -287,18 +288,19 @@ function DownloadTile({
   label,
   icon,
   sub,
+  filename,
 }: {
   href: string;
   label: string;
   icon: ReactNode;
   sub?: string;
+  filename: string;
 }) {
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noreferrer"
-      className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 transition-colors hover:border-slate-300 hover:bg-slate-50"
+    <button
+      type="button"
+      onClick={() => void downloadProtectedFile(href, filename)}
+      className="group flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 text-left transition-colors hover:border-slate-300 hover:bg-slate-50"
     >
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
         {icon}
@@ -313,8 +315,8 @@ function DownloadTile({
         )}
       </span>
 
-      <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-slate-400 group-hover:text-slate-600" />
-    </a>
+      <DownloadIcon className="ml-auto h-4 w-4 shrink-0 text-slate-400 group-hover:text-slate-600" />
+    </button>
   );
 }
 
@@ -576,12 +578,6 @@ export default function Dashboard() {
           </div>
         )}
 
-        {!isAdmin && (
-          <div className="mt-5">
-            <ViewerNotice message="У вас нет прав на запуск новых проверок и изменение данных. Доступен только просмотр истории и отчётов." />
-          </div>
-        )}
-
         <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <HeroMetric
             label="Продуктов"
@@ -728,7 +724,7 @@ export default function Dashboard() {
             <QuickAction
               to="/client-licenses"
               title="Клиентские ключи"
-              desc="Отдельный контур server-side licensing Entitlex."
+              desc="Отдельный контур серверной проверки лицензий Entitlex."
               icon={<KeyRound className="h-4 w-4" />}
             />
           </div>
@@ -798,36 +794,41 @@ export default function Dashboard() {
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
           <DownloadTile
             href={download.xlsx}
-            label="Excel"
-            sub="Сводная таблица"
+            label="Основной XLSX-отчёт"
+            sub="Сводная таблица по последней проверке"
+            filename="license-monitor-report.xlsx"
             icon={<FileSpreadsheet className="h-4 w-4" />}
           />
 
           <DownloadTile
             href={download.reportCsv}
-            label="report.csv"
-            sub="Отчёт по продуктам"
+            label="CSV результатов"
+            sub="Расчёт по продуктам"
+            filename="license-monitor-results.csv"
             icon={<FileText className="h-4 w-4" />}
           />
 
           <DownloadTile
             href={download.runsCsv}
-            label="runs.csv"
-            sub="История запусков"
+            label="История запусков"
+            sub="Список выполненных проверок"
+            filename="license-monitor-runs.csv"
             icon={<DownloadIcon className="h-4 w-4" />}
           />
 
           <DownloadTile
             href={download.unmatchedCsv}
-            label="unmatched.csv"
-            sub="Несопоставленные строки"
+            label="Несопоставленные"
+            sub="Строки без правил сопоставления"
+            filename="license-monitor-unmatched.csv"
             icon={<DownloadIcon className="h-4 w-4" />}
           />
 
           <DownloadTile
             href={download.badRowsCsv}
-            label="bad_rows.csv"
-            sub="Проблемные строки"
+            label="Ошибки CSV"
+            sub="Проблемные строки импорта"
+            filename="license-monitor-bad-rows.csv"
             icon={<DownloadIcon className="h-4 w-4" />}
           />
         </div>
@@ -863,6 +864,14 @@ export default function Dashboard() {
           ) : (
             <TableScroll>
               <TableInner density="comfortable">
+                <colgroup>
+                  <col className="w-[13px]" />
+                  <col className="w-[30%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[15%]" />
+                </colgroup>
                 <THead>
                   <tr>
                     <Th>ID</Th>

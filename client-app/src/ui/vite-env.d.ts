@@ -37,6 +37,7 @@ interface Window {
             check: () => Promise<LicenseValidationResponse>;
             activate: (licenseKey: string) => Promise<LicenseValidationResponse>;
             deactivate: () => Promise<{ ok: true; deactivated: boolean }>;
+            onManualCheck?: (callback: () => void) => () => void;
         };
     };
     settings: {

@@ -231,6 +231,14 @@ export type LicenseValidationResult =
     valid: false;
     reason: LicenseCheckReason;
   };
+export type AdminAuditLogInput = {
+  user_id?: number | null;
+  login?: string | null;
+  action: string;
+  entity_type: string;
+  entity_id?: string | number | null;
+  message?: string | null;
+};
 
 export function initDatabase(dbPath: string): DB {
   mkdirSync(dirname(dbPath), { recursive: true });
@@ -465,6 +473,23 @@ CREATE INDEX IF NOT EXISTS idx_license_events_created_at
 
 CREATE INDEX IF NOT EXISTS idx_license_events_event_type
   ON license_events(event_type);
+
+  CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER,
+  login TEXT,
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT,
+  message TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_log_created_at
+  ON admin_audit_log(created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_admin_audit_log_entity
+  ON admin_audit_log(entity_type, entity_id);
   `);
 
   const columns = db.prepare(`PRAGMA table_info(users)`).all() as Array<{ name: string }>;
@@ -880,8 +905,8 @@ export function updateMappingRule(
       updated_at = ?
     WHERE id = ?
   `).run(
-    input.pattern,
-    input.canonical_product,
+    input.pattern.trim(),
+    input.canonical_product.trim(),
     input.product_id ?? null,
     input.match_type ?? "contains",
     now,
@@ -897,6 +922,38 @@ export function updateMappingRule(
   }
 
   return row;
+}
+
+export function upsertMappingRule(
+  db: DB,
+  input: MappingRuleInput
+): MappingRuleRow {
+  const cleanPattern = input.pattern.trim();
+  const cleanMatchType = input.match_type?.trim() || "contains";
+
+  const existing = db.prepare(`
+    SELECT id
+    FROM mapping_rules
+    WHERE LOWER(TRIM(pattern)) = LOWER(TRIM(?))
+      AND LOWER(TRIM(match_type)) = LOWER(TRIM(?))
+    LIMIT 1
+  `).get(cleanPattern, cleanMatchType) as { id: number } | undefined;
+
+  if (existing) {
+    return updateMappingRule(db, existing.id, {
+      pattern: cleanPattern,
+      canonical_product: input.canonical_product.trim(),
+      product_id: input.product_id,
+      match_type: cleanMatchType,
+    });
+  }
+
+  return createMappingRule(db, {
+    pattern: cleanPattern,
+    canonical_product: input.canonical_product.trim(),
+    product_id: input.product_id,
+    match_type: cleanMatchType,
+  });
 }
 
 export function removeMappingRule(db: DB, id: number): { ok: true } {
@@ -1478,7 +1535,7 @@ export function updateClientLicense(
     id
   );
 
-  if (input.status === "blocked") {
+  if (input.status === "blocked" && existing.status !== "blocked") {
     db.prepare(`
     UPDATE license_activations
     SET status = 'deactivated'
@@ -1974,4 +2031,78 @@ export function listLicenseEvents(
     ORDER BY created_at DESC, id DESC
     LIMIT 200
   `).all() as LicenseEventRow[];
+}
+
+export function cleanupOldReadAlerts(db: DB, days: number): { ok: true; deleted: number } {
+  if (!Number.isFinite(days) || days < 0) {
+    throw new Error("days must be >= 0");
+  }
+
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
+  const result = db.prepare(`
+    DELETE FROM alerts
+    WHERE is_read = 1
+      AND created_at < ?
+  `).run(cutoff);
+
+  return {
+    ok: true,
+    deleted: Number(result.changes ?? 0),
+  };
+}
+export function createAdminAuditLog(
+  db: DB,
+  input: AdminAuditLogInput
+): number {
+  const result = db.prepare(`
+    INSERT INTO admin_audit_log (
+      user_id,
+      login,
+      action,
+      entity_type,
+      entity_id,
+      message,
+      created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    input.user_id ?? null,
+    input.login?.trim() || null,
+    input.action.trim(),
+    input.entity_type.trim(),
+    input.entity_id != null ? String(input.entity_id) : null,
+    input.message?.trim() || null,
+    new Date().toISOString()
+  );
+
+  return Number(result.lastInsertRowid);
+}
+
+export type AdminAuditLogRow = {
+  id: number;
+  user_id: number | null;
+  login: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  message: string | null;
+  created_at: string;
+};
+
+export function listAdminAuditLog(db: DB, limit = 200): AdminAuditLogRow[] {
+  return db.prepare(`
+    SELECT
+      id,
+      user_id,
+      login,
+      action,
+      entity_type,
+      entity_id,
+      message,
+      created_at
+    FROM admin_audit_log
+    ORDER BY created_at DESC, id DESC
+    LIMIT ?
+  `).all(Math.max(1, Math.min(Number(limit) || 200, 500))) as AdminAuditLogRow[];
 }

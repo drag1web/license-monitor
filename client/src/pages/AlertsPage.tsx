@@ -23,6 +23,7 @@ import { Card } from "../ui/Card";
 import { cn } from "../ui/cn/cn";
 import { PageHeader } from "../components/PageHeader";
 
+
 type AlertsTab = "all" | "unread" | "critical";
 
 function formatWhen(iso: string) {
@@ -211,10 +212,10 @@ export default function AlertsPage() {
         prev.map((item) =>
           item.id === id
             ? {
-                ...item,
-                is_read: 1,
-                read_at: item.read_at ?? new Date().toISOString(),
-              }
+              ...item,
+              is_read: 1,
+              read_at: item.read_at ?? new Date().toISOString(),
+            }
             : item
         )
       );
@@ -293,7 +294,6 @@ export default function AlertsPage() {
         title="Уведомления"
         subtitle="Системные события, предупреждения и критичные проблемы по результатам проверок."
       />
-
       <Card className="p-5">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:min-w-[520px]">
@@ -348,6 +348,7 @@ export default function AlertsPage() {
               >
                 Удалить прочитанные
               </ActionButton>
+              
             </div>
           </div>
         </div>

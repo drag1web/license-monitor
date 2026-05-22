@@ -3,8 +3,9 @@ import rateLimit from "express-rate-limit";
 import express, { type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import multer from "multer";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { readCsv } from "./io/readCsv.js";
 import { createReadStream, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,6 +45,10 @@ import {
   listLicenseActivations,
   listLicenseEvents,
   getRunUnmatchedRows,
+  upsertMappingRule,
+  cleanupOldReadAlerts,
+  createAdminAuditLog,
+  listAdminAuditLog,
   type LicenseRegistryInput,
   type MappingRuleInput,
   type ClientLicenseInput,
@@ -101,6 +106,12 @@ function resolveConfigPaths(config: Config): Config {
   };
 }
 
+function safeBackupStamp() {
+  return new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-");
+}
+
 function download(res: Response, filePath: string) {
   if (!existsSync(filePath)) {
     res.status(404).json({ error: "Файл не найден", filePath });
@@ -147,10 +158,136 @@ function requireRole(role: "admin" | "viewer") {
   };
 }
 
+
+type LicenseCsvRow = {
+  id?: string;
+  product?: string;
+  product_name?: string;
+  vendor?: string;
+  license_type?: string;
+  assignment_type?: string;
+  seats_total?: string | number;
+  seats_used?: string | number;
+  count?: string | number;
+  starts_at?: string;
+  expires_at?: string;
+  start_date?: string;
+  end_date?: string;
+  note?: string;
+};
+
+type MappingCsvRow = {
+  pattern?: string;
+  canonical_product?: string;
+  product?: string;
+  product_name?: string;
+  match_type?: string;
+};
+
+function makeRegistryId(row: LicenseCsvRow, index: number) {
+  return (
+    row.id?.trim() ||
+    `CSV-${String(row.product || row.product_name || "LICENSE").trim().toUpperCase().replace(/\s+/g, "-")}-${index + 1}`
+  );
+}
+
+async function importLicensesCsvToRegistry(db: ReturnType<typeof initDatabase>, filePath: string) {
+  const rows = await readCsv<LicenseCsvRow>(filePath);
+
+  let imported = 0;
+  let skipped = 0;
+
+  const tx = db.transaction((inputRows: LicenseCsvRow[]) => {
+    inputRows.forEach((row, index) => {
+      const product = String(row.product || row.product_name || "").trim();
+
+      if (!product) {
+        skipped += 1;
+        return;
+      }
+
+      upsertLicenseRegistry(db, {
+        id: makeRegistryId(row, index),
+        product,
+        vendor: String(row.vendor || "").trim(),
+        license_type: ["perpetual", "subscription", "trial"].includes(String(row.license_type))
+          ? row.license_type as LicenseRegistryInput["license_type"]
+          : "perpetual",
+        assignment_type: ["per_install", "per_user", "concurrent"].includes(String(row.assignment_type))
+          ? row.assignment_type as LicenseRegistryInput["assignment_type"]
+          : "per_install",
+        seats_total: Number(row.seats_total ?? row.count ?? 0) || 0,
+        seats_used: Number(row.seats_used ?? 0) || 0,
+        starts_at: String(row.starts_at || row.start_date || "").trim(),
+        expires_at: String(row.expires_at || row.end_date || "").trim(),
+        note: String(row.note || "Импортировано из CSV").trim(),
+      });
+
+      imported += 1;
+    });
+  });
+
+  tx(rows);
+
+  return { rowsCount: rows.length, imported, skipped };
+}
+
+async function importMappingCsvToDb(db: ReturnType<typeof initDatabase>, filePath: string) {
+  const rows = await readCsv<MappingCsvRow>(filePath);
+
+  let imported = 0;
+  let skipped = 0;
+
+  const tx = db.transaction((inputRows: MappingCsvRow[]) => {
+    inputRows.forEach((row) => {
+      const pattern = String(row.pattern || "").trim();
+      const canonical = String(row.canonical_product || row.product || row.product_name || "").trim();
+
+      if (!pattern || !canonical) {
+        skipped += 1;
+        return;
+      }
+
+      upsertMappingRule(db, {
+        pattern,
+        canonical_product: canonical,
+        match_type: String(row.match_type || "contains").trim(),
+      });
+
+      imported += 1;
+    });
+  });
+
+  tx(rows);
+
+  return { rowsCount: rows.length, imported, skipped };
+}
+
 async function main() {
   const rawConfig = await loadConfig();
   const config = resolveConfigPaths(rawConfig);
   const db = initDatabase(config.dbPath);
+
+  function audit(
+    req: AuthedReq,
+    action: string,
+    entityType: string,
+    entityId?: string | number | null,
+    message?: string
+  ) {
+    try {
+      createAdminAuditLog(db, {
+        user_id: req.session.user?.id ?? null,
+        login: req.session.user?.login ?? null,
+        action,
+        entity_type: entityType,
+        entity_id: entityId ?? null,
+        message: message ?? null,
+      });
+    } catch (e) {
+      console.error("AUDIT LOG ERROR:", e);
+    }
+  }
 
   if (config.legacyLicensesJsonPath) {
     try {
@@ -421,6 +558,7 @@ async function main() {
     }
 
     try {
+      const before = listLicensesRegistry(db).find((x) => x.id === String(body.id));
       const row = upsertLicenseRegistry(db, {
         id: String(body.id),
         product: String(body.product).trim(),
@@ -434,6 +572,16 @@ async function main() {
         note: body.note ? String(body.note) : "",
       });
 
+      audit(
+        req,
+        before ? "update_license_registry" : "create_license_registry",
+        "licenses_registry",
+        row.id,
+        before
+          ? `Изменена лицензия "${row.product}": seats ${before.seats_used}/${before.seats_total} → ${row.seats_used}/${row.seats_total}`
+          : `Создана лицензия "${row.product}": seats ${row.seats_used}/${row.seats_total}`
+      );
+
       res.json(row);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -441,7 +589,7 @@ async function main() {
     }
   });
 
-  app.delete("/api/licenses/:id", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+  app.delete("/api/licenses/:id", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
     const id = String(req.params.id || "").trim();
 
     if (!id) {
@@ -450,7 +598,17 @@ async function main() {
     }
 
     try {
+      const before = listLicensesRegistry(db).find((x) => x.id === id);
       const out = removeLicenseRegistry(db, id);
+      audit(
+        req,
+        "delete_license_registry",
+        "licenses_registry",
+        id,
+        before
+          ? `Удалена лицензия "${before.product}": seats ${before.seats_used}/${before.seats_total}`
+          : `Удалена лицензия id=${id}`
+      );
       res.json(out);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -483,6 +641,14 @@ async function main() {
         category: body.category ? String(body.category) : undefined,
       });
 
+      audit(
+        req,
+        "create_product",
+        "products",
+        row.id,
+        `Создан продукт "${row.name}"`
+      );
+
       res.json(row);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -505,11 +671,22 @@ async function main() {
     }
 
     try {
+      const before = listProducts(db).find((x) => x.id === id);
       const row = updateProduct(db, id, {
         name: String(body.name).trim(),
         vendor: body.vendor ? String(body.vendor) : undefined,
         category: body.category ? String(body.category) : undefined,
       });
+
+      audit(
+        req,
+        "update_product",
+        "products",
+        row.id,
+        before
+          ? `Изменён продукт "${before.name}" → "${row.name}"`
+          : `Изменён продукт "${row.name}"`
+      );
 
       res.json(row);
     } catch (e: unknown) {
@@ -518,7 +695,7 @@ async function main() {
     }
   });
 
-  app.delete("/api/products/:id", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+  app.delete("/api/products/:id", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
     const id = Number(req.params.id);
 
     if (!Number.isFinite(id) || id <= 0) {
@@ -527,7 +704,15 @@ async function main() {
     }
 
     try {
+      const before = listProducts(db).find((x) => x.id === id);
       const out = removeProduct(db, id);
+      audit(
+        req,
+        "delete_product",
+        "products",
+        id,
+        before ? `Удалён продукт "${before.name}"` : `Удалён продукт id=${id}`
+      );
       res.json(out);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -565,6 +750,14 @@ async function main() {
         product_id: Number.isFinite(Number(body.product_id)) ? Number(body.product_id) : undefined,
         match_type: body.match_type ? String(body.match_type) : "contains",
       });
+
+      audit(
+        req,
+        "create_mapping_rule",
+        "mapping_rules",
+        row.id,
+        `Создано правило "${row.pattern}" → "${row.canonical_product}"`
+      );
 
       res.json(row);
     } catch (e: unknown) {
@@ -610,12 +803,23 @@ async function main() {
     }
 
     try {
+      const before = listMappingRules(db).find((x) => x.id === id);
       const row = updateMappingRule(db, id, {
         pattern: String(body.pattern).trim(),
         canonical_product: String(body.canonical_product).trim(),
         product_id: Number.isFinite(Number(body.product_id)) ? Number(body.product_id) : undefined,
         match_type: body.match_type ? String(body.match_type) : "contains",
       });
+
+      audit(
+        req,
+        "update_mapping_rule",
+        "mapping_rules",
+        row.id,
+        before
+          ? `Изменено правило "${before.pattern}" → "${row.pattern}", продукт: "${row.canonical_product}"`
+          : `Изменено правило "${row.pattern}"`
+      );
 
       res.json(row);
     } catch (e: unknown) {
@@ -624,7 +828,7 @@ async function main() {
     }
   });
 
-  app.delete("/api/mapping-rules/:id", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+  app.delete("/api/mapping-rules/:id", requireAuth, requireRole("admin"), (req: AuthedReq, res: Response) => {
     const id = Number(req.params.id);
 
     if (!Number.isFinite(id) || id <= 0) {
@@ -633,7 +837,17 @@ async function main() {
     }
 
     try {
+      const before = listMappingRules(db).find((x) => x.id === id);
       const out = removeMappingRule(db, id);
+      audit(
+        req,
+        "delete_mapping_rule",
+        "mapping_rules",
+        id,
+        before
+          ? `Удалено правило "${before.pattern}" → "${before.canonical_product}"`
+          : `Удалено правило id=${id}`
+      );
       res.json(out);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -671,14 +885,84 @@ async function main() {
           return;
         }
 
+        if (importType === "licenses") {
+          const result = await importLicensesCsvToRegistry(db, file.path);
+
+          createImportLog(db, {
+            import_type: importType,
+            file_name: file.originalname,
+            source_path: "sqlite:licenses_registry",
+            rows_count: result.imported,
+            status: result.skipped > 0 ? "partial" : "success",
+            comment: `imported to licenses_registry: ${result.imported}, skipped: ${result.skipped}`,
+          });
+
+          audit(
+            req,
+            "import_csv",
+            "licenses_registry",
+            null,
+            `Импорт лицензий из ${file.originalname}: imported=${result.imported}, skipped=${result.skipped}`
+          );
+
+          res.json({
+            ok: true,
+            file_name: file.originalname,
+            saved_as: file.filename,
+            path: file.path,
+            imported: result.imported,
+            skipped: result.skipped,
+          });
+          return;
+        }
+
+        if (importType === "mapping") {
+          const result = await importMappingCsvToDb(db, file.path);
+
+          createImportLog(db, {
+            import_type: importType,
+            file_name: file.originalname,
+            source_path: "sqlite:mapping_rules",
+            rows_count: result.imported,
+            status: result.skipped > 0 ? "partial" : "success",
+            comment: `imported to mapping_rules: ${result.imported}, skipped: ${result.skipped}`,
+          });
+
+          audit(
+            req,
+            "import_csv",
+            "mapping_rules",
+            null,
+            `Импорт правил из ${file.originalname}: imported=${result.imported}, skipped=${result.skipped}`
+          );
+
+          res.json({
+            ok: true,
+            file_name: file.originalname,
+            saved_as: file.filename,
+            path: file.path,
+            imported: result.imported,
+            skipped: result.skipped,
+          });
+          return;
+        }
+
         createImportLog(db, {
           import_type: importType,
           file_name: file.originalname,
           source_path: file.path,
           rows_count: 0,
           status: "success",
-          comment: `uploaded manually by ${req.session.user?.login ?? "unknown"}`,
+          comment: `uploaded installations.csv by ${req.session.user?.login ?? "unknown"}`,
         });
+
+        audit(
+          req,
+          "import_csv",
+          "installations",
+          file.filename,
+          `Загружен файл установок ${file.originalname}`
+        );
 
         res.json({
           ok: true,
@@ -704,6 +988,19 @@ async function main() {
     try {
       const out = deleteOldImportsKeepLast(db, keepLast);
       res.json(out);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ ok: false, error: msg });
+    }
+  });
+
+  app.get("/api/admin-audit-log", requireAuth, requireRole("admin"), (req: Request, res: Response) => {
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : 200;
+
+    try {
+      const rows = listAdminAuditLog(db, limit);
+      res.json(rows);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       res.status(500).json({ ok: false, error: msg });
@@ -781,6 +1078,22 @@ async function main() {
     }
   });
 
+  app.post("/api/alerts/cleanup/older-than", requireAuth, (req, res) => {
+    try {
+      const { days } = req.body;
+
+      if (!days || typeof days !== "number") {
+        return res.status(400).json({ error: "days is required" });
+      }
+
+      const out = cleanupOldReadAlerts(db, days);
+      res.json(out);
+    } catch (err) {
+      console.error("Cleanup alerts error:", err);
+      res.status(500).json({ error: "Failed to cleanup alerts" });
+    }
+  });
+
   // ---------------- SERVER-SIDE LICENSING ----------------
 
   app.get("/api/client-licenses", requireAuth, (_req: Request, res: Response) => {
@@ -821,6 +1134,13 @@ async function main() {
         expires_at: body.expires_at ? String(body.expires_at) : undefined,
         max_activations: Number(body.max_activations) || 1,
       });
+      audit(
+        req,
+        "create_client_license",
+        "client_licenses",
+        row.id,
+        `Создан клиентский ключ для "${row.product_name}", клиент: "${row.customer_name}", лимит: ${row.max_activations}`
+      );
 
       res.json(row);
     } catch (e: unknown) {
@@ -839,6 +1159,7 @@ async function main() {
     }
 
     try {
+      const before = listClientLicenses(db).find((x) => x.id === id);
       const row = updateClientLicense(db, id, {
         ...(body.license_key !== undefined
           ? { license_key: String(body.license_key).trim() }
@@ -868,6 +1189,18 @@ async function main() {
           ? { max_activations: Number(body.max_activations) || 1 }
           : {}),
       });
+
+      audit(
+        req,
+        row.status === "blocked" && before?.status !== "blocked"
+          ? "block_client_license"
+          : "update_client_license",
+        "client_licenses",
+        row.id,
+        before
+          ? `Изменён клиентский ключ "${row.product_name}", статус: ${before.status} → ${row.status}, лимит: ${before.max_activations} → ${row.max_activations}`
+          : `Изменён клиентский ключ "${row.product_name}"`
+      );
 
       res.json(row);
     } catch (e: unknown) {
@@ -1117,9 +1450,10 @@ async function main() {
   });
 
   // запуск проверки — строго только после логина
-  app.post("/api/run", requireAuth, requireRole("admin"), async (_req: Request, res: Response) => {
+  app.post("/api/run", requireAuth, requireRole("admin"), async (req: AuthedReq, res: Response) => {
     try {
       const out = await runPipeline(config);
+      audit(req, "run_check", "run", out.runId, `Запущена проверка лицензий #${out.runId}`);
       res.json({ ok: true, runId: out.runId });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -1138,6 +1472,58 @@ async function main() {
       res.status(500).json({ ok: false, error: msg });
     }
   });
+
+  app.get(
+    "/api/admin/backup/database",
+    requireAuth,
+    requireRole("admin"),
+    (req: AuthedReq, res: Response) => {
+      try {
+        const backupDir = path.resolve(process.cwd(), "backups");
+        mkdirSync(backupDir, { recursive: true });
+
+        const fileName = `license-monitor-db-${safeBackupStamp()}.sqlite`;
+        const backupPath = path.join(backupDir, fileName);
+
+        if (existsSync(backupPath)) {
+          rmSync(backupPath, { force: true });
+        }
+
+        // Важно: VACUUM INTO создаёт консистентную копию SQLite,
+        // а не просто копирует .sqlite файл рядом с WAL.
+        db.prepare("VACUUM INTO ?").run(backupPath);
+
+        audit(
+          req,
+          "backup_database",
+          "database",
+          fileName,
+          `Создана резервная копия базы данных: ${fileName}`
+        );
+
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${fileName}"`
+        );
+
+        const stream = createReadStream(backupPath);
+
+        stream.on("close", () => {
+          try {
+            rmSync(backupPath, { force: true });
+          } catch {
+            // ignore cleanup error
+          }
+        });
+
+        stream.pipe(res);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        res.status(500).json({ ok: false, error: msg });
+      }
+    }
+  );
 
   // ---------------- downloads (тоже под auth) ----------------
   app.get("/download/report.xlsx", requireAuth, (_req: Request, res: Response) =>

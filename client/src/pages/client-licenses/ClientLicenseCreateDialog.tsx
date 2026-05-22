@@ -108,7 +108,7 @@ export function ClientLicenseCreateDialog({
             </div>
 
             <div className="mt-1 text-sm leading-6 text-slate-600">
-              Создание server-side лицензии для защищённого клиентского приложения.
+              Создание серверной проверки лицензии для защищённого клиентского приложения.
             </div>
           </div>
 
@@ -142,7 +142,7 @@ export function ClientLicenseCreateDialog({
                   onChange={(e) =>
                     setDraft((d) => ({ ...d, product_name: e.target.value }))
                   }
-                  placeholder="Meridian Client App"
+                  placeholder="Entitlex"
                 />
               </Field>
 

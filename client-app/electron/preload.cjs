@@ -8,6 +8,14 @@ contextBridge.exposeInMainWorld("meridian", {
     check: () => ipcRenderer.invoke("license:check"),
     activate: (licenseKey) => ipcRenderer.invoke("license:activate", licenseKey),
     deactivate: () => ipcRenderer.invoke("license:deactivate"),
+    onManualCheck: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on("license:manual-check", listener);
+
+      return () => {
+        ipcRenderer.removeListener("license:manual-check", listener);
+      };
+    },
   },
 });
 

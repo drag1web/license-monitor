@@ -13,6 +13,7 @@ import Dictionaries from "./pages/Dictionaries";
 import DictionariesProducts from "./pages/DictionariesProducts";
 import DictionariesMapping from "./pages/DictionariesMapping";
 import ClientLicenses from "./pages/ClientLicenses";
+import AdminAuditLog from "./pages/AdminAuditLog";
 
 import { Protected } from "./Protected";
 import { useAuth } from "./auth/AuthContext";
@@ -145,6 +146,15 @@ function AuthedRoutes() {
                 <Dictionaries>
                   <DictionariesMapping />
                 </Dictionaries>
+              </ProtectedShell>
+            }
+          />
+
+          <Route
+            path="/admin-audit-log"
+            element={
+              <ProtectedShell title="Журнал действий">
+                <AdminAuditLog />
               </ProtectedShell>
             }
           />

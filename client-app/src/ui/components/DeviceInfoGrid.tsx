@@ -40,7 +40,11 @@ export function DeviceInfoGrid({
           Последняя проверка
         </div>
         <div className="mt-2 text-sm text-slate-900">
-          {lastCheckAt === "cached" ? "из кэша" : lastCheckAt === "offline" ? "offline" : lastCheckAt || "—"}
+          {lastCheckAt === "cached"
+            ? "ожидание проверки"
+            : lastCheckAt === "offline"
+              ? "автономный режим"
+              : lastCheckAt || "—"}
         </div>
         <div className="mt-1 text-xs text-slate-500">автоматическая перепроверка</div>
       </div>

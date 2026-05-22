@@ -95,7 +95,7 @@ export function ProductWorkspace({
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <Metric
-          label="Activation ID"
+          label="ID активации"
           value={activationId ? String(activationId) : "—"}
           hint="текущая активация"
           icon={ShieldCheck}
@@ -110,7 +110,7 @@ export function ProductWorkspace({
 
         <Metric
           label="Режим"
-          value={offlineMode ? "Offline" : "Online"}
+          value={offlineMode ? "Автономно" : "Онлайн"}
           hint="состояние проверки"
           icon={offlineMode ? WifiOff : Database}
         />
@@ -119,7 +119,7 @@ export function ProductWorkspace({
       <div className="grid gap-2">
         <Row icon={Monitor} label="Устройство" value={deviceName || "—"} />
         <Row icon={Server} label="Сервер" value={serverUrl || "—"} />
-        <Row icon={ShieldCheck} label="Runtime" value="protected" badge />
+        <Row icon={ShieldCheck} label="Режим доступа" value="Защищено" badge />
       </div>
     </div>
   );

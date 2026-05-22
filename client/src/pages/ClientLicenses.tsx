@@ -12,7 +12,7 @@ import {
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { useToast } from "../ui/toast";
-import { ViewerNotice } from "../components/ViewerNotice";
+
 import { useAuth } from "../auth/AuthContext";
 import { cn } from "../ui/cn/cn";
 import { PageHeader } from "../components/PageHeader";
@@ -420,7 +420,7 @@ export default function ClientLicenses() {
 
       <PageHeader
         title="Клиентские ключи"
-        subtitle="Управление server-side лицензированием: ключи, клиенты, лимиты активаций, устройства и события проверки."
+        subtitle="Управление серверной проверки лицензированием: ключи, клиенты, лимиты активаций, устройства и события проверки."
         right={
           <div className="flex flex-wrap gap-2">
             <Button variant="ghost" onClick={load}>
@@ -442,10 +442,6 @@ export default function ClientLicenses() {
           </div>
         }
       />
-
-      {!isAdmin && (
-        <ViewerNotice message="У вас режим только для просмотра. Управление клиентскими лицензиями доступно только admin." />
-      )}
 
       <Card className="p-5">
         <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">

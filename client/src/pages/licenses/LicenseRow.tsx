@@ -1,6 +1,5 @@
 import type { LicenseRow as Row } from "../../api";
 import { cn } from "../../ui/cn/cn";
-import { Button } from "../../ui/Button";
 import { Tr, Td } from "../../ui/Table";
 import {
   CheckSquare,
@@ -8,7 +7,6 @@ import {
   Pin,
   PinOff,
   MoreHorizontal,
-  Pencil,
   CalendarClock,
   Building2,
   Tags,
@@ -28,14 +26,6 @@ export function LicenseRow({
   showVendor,
   showType,
   showNote,
-  editingSeatsId,
-  tmpUsed,
-  tmpTotal,
-  setTmpUsed,
-  setTmpTotal,
-  onBeginSeatsEdit,
-  onCancelSeatsEdit,
-  onCommitSeatsEdit,
   onOpenEditRow,
   onOpenMenu,
 }: {
@@ -70,7 +60,6 @@ export function LicenseRow({
 
   const st = statusTone(row);
   const statusLabel = st === "bad" ? "Риск" : st === "warn" ? "Внимание" : "Норма";
-  const isEditingSeats = editingSeatsId === row.id;
 
   const tdPad = compact ? "py-2" : "py-3";
   const subText = compact ? "text-[10px]" : "text-[11px]";
@@ -96,11 +85,6 @@ export function LicenseRow({
       : seatsTone === "warn"
         ? "border-amber-200 bg-amber-50 text-amber-700"
         : "border-slate-200 bg-slate-50 text-slate-700";
-
-  const inputCls = cn(
-    "rounded-lg border border-slate-300 bg-white text-sm text-slate-900 outline-none focus:border-slate-600 focus:ring-2 focus:ring-slate-100",
-    compact ? "w-16 px-2 py-1" : "w-20 px-3 py-1.5"
-  );
 
   const actionBtn =
     "grid h-9 w-9 place-items-center rounded-lg border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-950";
@@ -198,61 +182,18 @@ export function LicenseRow({
       )}
 
       <Td className={cn(tdPad, "tabular-nums")}>
-        {!isEditingSeats ? (
-          <button
-            type="button"
-            onClick={onBeginSeatsEdit}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 transition hover:bg-slate-50",
-              seatsPillCls,
-              compact && "px-2.5 py-1"
-            )}
-            title="Изменить количество мест"
-          >
-            <span className="font-semibold">{seatsUsed}/{seatsTotal}</span>
-
-            {compact ? (
-              <Pencil className="h-3.5 w-3.5 opacity-60" />
-            ) : (
-              <span className={cn("opacity-60", subText)}>изменить</span>
-            )}
-          </button>
-        ) : (
-          <div className={cn("flex items-center gap-2", compact && "gap-1.5")}>
-            <input
-              className={inputCls}
-              type="number"
-              value={tmpUsed}
-              onChange={(e) => setTmpUsed(safeNum(e.target.value))}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") onCancelSeatsEdit();
-                if (e.key === "Enter") onCommitSeatsEdit();
-              }}
-              autoFocus
-            />
-
-            <span className="text-slate-400">/</span>
-
-            <input
-              className={inputCls}
-              type="number"
-              value={tmpTotal}
-              onChange={(e) => setTmpTotal(safeNum(e.target.value))}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") onCancelSeatsEdit();
-                if (e.key === "Enter") onCommitSeatsEdit();
-              }}
-            />
-
-            <Button variant="ghost" size="sm" onClick={onCommitSeatsEdit}>
-              Сохранить
-            </Button>
-
-            <Button variant="ghost" size="sm" onClick={onCancelSeatsEdit}>
-              Отмена
-            </Button>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={onOpenEditRow}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 transition hover:bg-slate-50",
+            seatsPillCls,
+            compact && "px-2.5 py-1"
+          )}
+          title="Открыть редактирование лицензии"
+        >
+          <span className="font-semibold">{seatsUsed}/{seatsTotal}</span>
+        </button>
       </Td>
 
       <Td
@@ -290,7 +231,7 @@ export function LicenseRow({
         )}
       </Td>
 
-      <Td className={cn(tdPad, "text-right")}>
+      <Td className={cn(tdPad, "pr-5 text-right")}>
         <div className={cn("inline-flex items-center gap-2", compact && "gap-1.5")}>
           <button
             type="button"

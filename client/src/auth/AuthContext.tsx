@@ -27,12 +27,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function login(login: string, password: string) {
     const r = await api.login(login, password);
     if (!r.ok) throw new Error(r.error ?? "login failed");
+
+    if (r.user?.role === "viewer") {
+      sessionStorage.setItem("lm_show_viewer_login_modal", "1");
+    } else {
+      sessionStorage.removeItem("lm_show_viewer_login_modal");
+    }
+
     setUser(r.user!);
   }
-
   async function register(login: string, password: string) {
     const r = await api.register(login, password);
     if (!r.ok) throw new Error(r.error ?? "register failed");
+
+    if (r.user?.role === "viewer") {
+      sessionStorage.setItem("lm_show_viewer_login_modal", "1");
+    } else {
+      sessionStorage.removeItem("lm_show_viewer_login_modal");
+    }
+
     setUser(r.user!);
   }
 
@@ -43,6 +56,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function logout() {
     await api.logout();
+    sessionStorage.removeItem("lm_show_viewer_login_modal");
+    sessionStorage.removeItem(`lm_viewer_mode_seen:${user?.login ?? ""}`);
     setUser(null);
   }
 

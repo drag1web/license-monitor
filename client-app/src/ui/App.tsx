@@ -104,6 +104,16 @@ export function App() {
     }
   }, []);
 
+  const manualCheck = useCallback(async () => {
+    setCheckingNow(true);
+
+    try {
+      await checkLicense();
+    } finally {
+      setCheckingNow(false);
+    }
+  }, [checkLicense]);
+
   useEffect(() => {
     async function boot() {
       try {
@@ -119,9 +129,6 @@ export function App() {
           setActivationId(cached.activation_id ?? null);
           setExpiresAt(cached.expires_at ?? null);
           setLastCheckAt("cached");
-
-          // НЕ показываем valid сразу
-          // ждём checkLicense()
         }
       } catch {
         // ignore
@@ -130,28 +137,19 @@ export function App() {
       await checkLicense();
     }
 
-    boot();
+    void boot();
   }, [checkLicense]);
 
   useEffect(() => {
     if (screen !== "valid") return;
 
     const id = window.setInterval(() => {
-      checkLicense();
+      void checkLicense();
     }, checkIntervalSec * 1000);
 
     return () => window.clearInterval(id);
   }, [screen, checkLicense, checkIntervalSec]);
 
-  async function manualCheck() {
-    setCheckingNow(true);
-
-    try {
-      await checkLicense();
-    } finally {
-      setCheckingNow(false);
-    }
-  }
 
   async function activate() {
     const cleanKey = key.trim();
@@ -221,8 +219,8 @@ export function App() {
     setSettingsSaving(true);
 
     try {
-      const saved = await saveSettings(next);
-      setSettings(saved);
+      await saveSettings(next);
+      setSettings(next);
 
       const info = await getDeviceInfo();
       setDevice(info);

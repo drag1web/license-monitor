@@ -4,8 +4,6 @@ import { BookOpen, Boxes, GitBranch } from "lucide-react";
 
 import { Card } from "../ui/Card";
 import { cn } from "../ui/cn/cn";
-import { ViewerNotice } from "../components/ViewerNotice";
-import { useAuth } from "../auth/AuthContext";
 
 type DictionariesProps = {
   children: React.ReactNode;
@@ -30,7 +28,6 @@ const tabs = [
 
 export default function Dictionaries({ children }: DictionariesProps) {
   const { pathname } = useLocation();
-  const { user } = useAuth();
 
   const activeTab = tabs.find((tab) => tab.match(pathname)) ?? tabs[0];
 
@@ -85,10 +82,6 @@ export default function Dictionaries({ children }: DictionariesProps) {
           <div className="mt-1 text-sm text-slate-600">{activeTab.hint}</div>
         </div>
       </Card>
-
-      {user?.role === "viewer" && (
-        <ViewerNotice message="У вас режим только просмотра. Управление справочниками доступно только администратору." />
-      )}
 
       {children}
     </div>

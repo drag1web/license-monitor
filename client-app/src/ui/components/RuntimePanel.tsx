@@ -13,7 +13,7 @@ export function RuntimePanel({
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
             <AlertTriangle className="h-4 w-4 text-amber-600" />
-            Runtime-контроль
+            Контроль доступа
           </div>
 
           <div className="mt-2 text-sm leading-6 text-slate-600">
@@ -29,7 +29,7 @@ export function RuntimePanel({
       <div className="mt-4 grid gap-2 text-xs">
         <div className="flex justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
           <span className="text-slate-500">Политика</span>
-          <span className="font-medium text-slate-900">server-side</span>
+          <span className="font-medium text-slate-900">серверная проверка</span>
         </div>
 
         <div className="flex justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">

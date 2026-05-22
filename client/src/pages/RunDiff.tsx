@@ -19,8 +19,7 @@ import {
 import { cn } from "../ui/cn/cn";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
-import { useAuth } from "../auth/AuthContext";
-import { ViewerNotice } from "../components/ViewerNotice";
+
 import {
   Table,
   TableInner,
@@ -137,9 +136,6 @@ export default function RunDiff() {
   const toast = useToast();
   const { id } = useParams();
   const runId = useMemo(() => Number(id), [id]);
-
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -344,10 +340,6 @@ export default function RunDiff() {
 
   return (
     <div className="space-y-6">
-      {!isAdmin && (
-        <ViewerNotice message="У вас нет прав на изменение данных. Доступен только просмотр сравнений запусков." />
-      )}
-
       <Card className="p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex min-w-0 gap-4">

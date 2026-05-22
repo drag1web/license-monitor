@@ -14,7 +14,7 @@ import {
 } from "../api";
 
 import { useToast } from "../ui/toast";
-import { ViewerNotice } from "../components/ViewerNotice";
+
 import { useAuth } from "../auth/AuthContext";
 
 import { ConfirmDialog } from "../ui/modal/ConfirmDialog";
@@ -519,7 +519,7 @@ export default function Licenses() {
         title,
         description,
         confirmLabel,
-        cancelLabel: "Cancel",
+        cancelLabel: "Отмена",
         danger: true,
       });
     },
@@ -854,10 +854,6 @@ export default function Licenses() {
         onCancel={confirm.cancel}
         onConfirm={confirm.confirm}
       />
-
-      {!isAdmin && (
-        <ViewerNotice message="У вас нет прав на добавление, редактирование и удаление лицензий. Реестр доступен только для просмотра." />
-      )}
 
       {isAdmin && registryChanged && (
         <Card className="border-amber-200 bg-amber-50 p-4">

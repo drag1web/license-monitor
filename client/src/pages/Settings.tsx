@@ -10,6 +10,8 @@ import {
 import { useToast } from "../ui/toast";
 import { useAuth } from "../auth/AuthContext";
 
+import { download, downloadProtectedFile } from "../api";
+
 import {
   Settings as SettingsIcon,
   Palette,
@@ -22,8 +24,14 @@ import {
   SlidersHorizontal,
   Cpu,
   Eye,
-  Lock,
   Info,
+  Database,
+  FileSpreadsheet,
+  GitBranch,
+  KeyRound,
+  Server,
+  Boxes,
+  ChevronDown,
 } from "lucide-react";
 
 import type {
@@ -67,36 +75,64 @@ function Section({
   description,
   right,
   children,
+  collapsible = false,
+  defaultOpen = true,
 }: {
   icon: React.ReactNode;
   title: string;
   description?: string;
   right?: React.ReactNode;
   children: React.ReactNode;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
 }) {
-  return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 md:flex-row md:items-start md:justify-between">
-        <div className="flex gap-3">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600">
-            {icon}
-          </div>
+  const [open, setOpen] = React.useState(defaultOpen);
 
-          <div>
-            <div className="text-base font-semibold text-slate-950">{title}</div>
-
-            {description && (
-              <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-                {description}
-              </div>
-            )}
-          </div>
+  const header = (
+    <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 md:flex-row md:items-start md:justify-between">
+      <div className="flex gap-3">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600">
+          {icon}
         </div>
 
-        {right && <div className="shrink-0">{right}</div>}
+        <div>
+          <div className="text-base font-semibold text-slate-950">{title}</div>
+
+          {description && (
+            <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+              {description}
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="divide-y divide-slate-200">{children}</div>
+      <div className="flex shrink-0 items-center gap-2">
+        {right}
+
+        {collapsible && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            {open ? "Свернуть" : "Развернуть"}
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 transition-transform",
+                open && "rotate-180"
+              )}
+            />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  return (
+    <Card className="overflow-hidden">
+      {header}
+
+      {open && <div className="divide-y divide-slate-200">{children}</div>}
     </Card>
   );
 }
@@ -231,16 +267,58 @@ function ActionButton({
       className={cn(
         "inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-medium transition",
         variant === "primary" &&
-          "border-slate-900 bg-slate-900 text-white hover:bg-slate-800",
+        "border-slate-900 bg-slate-900 text-white hover:bg-slate-800",
         variant === "ghost" &&
-          "border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
+        "border-slate-300 bg-white text-slate-700 hover:bg-slate-50",
         variant === "danger" &&
-          "border-red-200 bg-red-50 text-red-700 hover:bg-red-100",
+        "border-red-200 bg-red-50 text-red-700 hover:bg-red-100",
         disabled && "cursor-not-allowed opacity-50"
       )}
     >
       {children}
     </button>
+  );
+}
+
+function InfoTile({
+  icon,
+  title,
+  value,
+  text,
+  tone = "neutral",
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+  text: string;
+  tone?: "neutral" | "ok" | "warn";
+}) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border bg-white p-4 shadow-sm",
+        tone === "neutral" && "border-slate-200",
+        tone === "ok" && "border-emerald-200 bg-emerald-50/40",
+        tone === "warn" && "border-amber-200 bg-amber-50/40"
+      )}
+    >
+      <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+        <span
+          className={cn(
+            "grid h-8 w-8 place-items-center rounded-lg border",
+            tone === "neutral" && "border-slate-200 bg-slate-50 text-slate-600",
+            tone === "ok" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+            tone === "warn" && "border-amber-200 bg-amber-50 text-amber-700"
+          )}
+        >
+          {icon}
+        </span>
+        {title}
+      </div>
+
+      <div className="mt-3 text-sm font-semibold text-slate-900">{value}</div>
+      <div className="mt-1 text-xs leading-5 text-slate-600">{text}</div>
+    </div>
   );
 }
 
@@ -296,6 +374,27 @@ export default function SettingsPage() {
       title: "Экспорт",
       message: "Файл настроек скачан.",
     });
+  }
+
+  async function doDatabaseBackup() {
+    try {
+      await downloadProtectedFile(
+        download.databaseBackup,
+        "license-monitor-backup.sqlite"
+      );
+
+      toast.push({
+        tone: "success",
+        title: "Резервное копирование",
+        message: "Копия базы данных скачана.",
+      });
+    } catch (e) {
+      toast.push({
+        tone: "error",
+        title: "Backup не скачан",
+        message: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
 
   async function doImportFromFile(file: File) {
@@ -463,29 +562,147 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      {!isAdmin && (
-        <Card className="border-amber-200 bg-amber-50 p-4">
-          <div className="flex items-start gap-3">
-            <Lock className="mt-0.5 h-5 w-5 text-amber-700" />
+      <Section
+        icon={<Database className="h-5 w-5" />}
+        title="Источники данных"
+        description="Раздел показывает, какие данные участвуют в расчёте лицензий и где хранится основной источник правды."
+      >
+        <div className="grid gap-3 px-5 py-4 lg:grid-cols-2">
+          <InfoTile
+            icon={<FileSpreadsheet className="h-4 w-4" />}
+            title="Установки программ"
+            value="CSV-инвентаризация"
+            text="Файл installations.csv используется как входной источник установок ПО. В промышленной версии этот источник может быть заменён агентом или интеграцией с системой инвентаризации."
+            tone="warn"
+          />
 
+          <InfoTile
+            icon={<Database className="h-4 w-4" />}
+            title="Лицензии организации"
+            value="Реестр licenses_registry"
+            text="Файл licenses.csv используется только как механизм импорта. После загрузки данные сохраняются в реестр лицензий и уже оттуда участвуют в расчётах."
+            tone="ok"
+          />
+
+          <InfoTile
+            icon={<GitBranch className="h-4 w-4" />}
+            title="Правила сопоставления"
+            value="Справочник mapping_rules"
+            text="Файл mapping.csv импортирует правила в базу данных. При запуске проверки используются правила из справочника, а не скрытый CSV-файл."
+            tone="ok"
+          />
+
+          <InfoTile
+            icon={<KeyRound className="h-4 w-4" />}
+            title="Клиентские ключи Entitlex"
+            value="client_licenses"
+            text="Клиентские ключи относятся к отдельному контуру серверной проверки лицензирования и не смешиваются с реестром лицензий организации."
+            tone="neutral"
+          />
+        </div>
+      </Section>
+
+      <Section
+        icon={<Boxes className="h-5 w-5" />}
+        title="Контуры системы"
+        description="License Monitor разделяет учёт лицензий организации и серверную проверку клиентских ключей Entitlex."
+      >
+        <div className="grid gap-3 px-5 py-4 lg:grid-cols-2">
+          <InfoTile
+            icon={<Database className="h-4 w-4" />}
+            title="Контур мониторинга лицензий"
+            value="installations → mapping_rules → runPipeline"
+            text="Используется для расчёта потребности, дефицита, истекающих лицензий, несопоставленных установок и формирования отчётов."
+            tone="ok"
+          />
+
+          <InfoTile
+            icon={<Server className="h-4 w-4" />}
+            title="Контур Entitlex"
+            value="activate / check / deactivate"
+            text="Используется отдельным клиентским приложением для проверки ключа на сервере и блокировки доступа при blocked, expired или deactivated."
+            tone="neutral"
+          />
+        </div>
+      </Section>
+
+      <Section
+        icon={<AlertTriangle className="h-5 w-5" />}
+        title="Ограничения текущей версии"
+        description="Эти ограничения не блокируют работу системы, но показывают направления промышленного развития."
+      >
+        <div className="grid gap-3 px-5 py-4 lg:grid-cols-3">
+          <InfoTile
+            icon={<FileSpreadsheet className="h-4 w-4" />}
+            title="Сбор установок"
+            value="Через CSV"
+            text="Автоматический агент пока не входит в текущую версию. Для дипломного проекта используется импорт данных инвентаризации."
+            tone="warn"
+          />
+
+          <InfoTile
+            icon={<Database className="h-4 w-4" />}
+            title="Хранилище"
+            value="SQLite"
+            text="SQLite подходит для локального внедрения и демонстрации. Для промышленной многопользовательской версии возможно развитие в сторону PostgreSQL."
+            tone="neutral"
+          />
+
+          <InfoTile
+            icon={<Shield className="h-4 w-4" />}
+            title="Безопасность"
+            value="Базовый уровень"
+            text="Реализованы роли, rate limit, audit log и серверная проверка Entitlex. HTTPS, CSRF, secure cookies и расширенный RBAC относятся к развитию."
+            tone="neutral"
+          />
+        </div>
+      </Section>
+
+      <Section
+        icon={<Database className="h-5 w-5" />}
+        title="Резервное копирование"
+        description="SQLite используется как локальное хранилище системы. Перед обновлением, переносом или демонстрацией рекомендуется скачать резервную копию базы данных."
+      >
+        <div className="px-5 py-4">
+          <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="text-sm font-semibold text-amber-900">
-                Режим ограниченного доступа
+              <div className="text-sm font-semibold text-slate-950">
+                Копия базы данных
               </div>
 
-              <div className="mt-1 text-sm text-amber-800">
-                Настройки интерфейса доступны, но смена пароля разрешена только
-                пользователю с ролью admin.
+              <div className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                Система создаёт консистентную SQLite-копию через серверный endpoint.
+                В backup попадают реестр лицензий, запуски проверок, результаты,
+                уведомления, клиентские ключи и журнал действий.
               </div>
+
+              {!isAdmin && (
+                <div className="mt-2 text-xs text-amber-700">
+                  Скачать резервную копию может только пользователь с ролью admin.
+                </div>
+              )}
             </div>
+
+            <ActionButton
+              variant="primary"
+              onClick={() => void doDatabaseBackup()}
+              disabled={!isAdmin}
+            >
+              <Download className="h-4 w-4" />
+              Скачать backup
+            </ActionButton>
           </div>
-        </Card>
-      )}
+        </div>
+      </Section>
+
+
 
       <Section
         icon={<Palette className="h-5 w-5" />}
         title="Интерфейс"
         description="Внешний вид и плотность отображения. Переключение темы временно заблокировано, чтобы не ломать единый корпоративный стиль."
+        collapsible
+        defaultOpen={false}
       >
         <FieldRow
           label="Тема"
@@ -495,7 +712,7 @@ export default function SettingsPage() {
             <SelectBox
               value="corporate-light"
               disabled
-              onChange={() => {}}
+              onChange={() => { }}
               options={[
                 {
                   value: "corporate-light",
@@ -547,6 +764,8 @@ export default function SettingsPage() {
         icon={<Cpu className="h-5 w-5" />}
         title="Производительность"
         description="Параметры, которые помогают уменьшить нагрузку на интерфейс."
+        collapsible
+        defaultOpen={false}
       >
         <FieldRow
           label="Отключать эффекты во время скролла"
@@ -599,6 +818,8 @@ export default function SettingsPage() {
         icon={<SlidersHorizontal className="h-5 w-5" />}
         title="Поведение"
         description="Стартовая страница, автообновление и подтверждения действий."
+        collapsible
+        defaultOpen={false}
       >
         <FieldRow label="Стартовая страница" hint="Куда переходить после входа.">
           <SelectBox
@@ -682,6 +903,8 @@ export default function SettingsPage() {
         icon={<Table2 className="h-5 w-5" />}
         title="Таблицы и данные"
         description="Режимы отображения таблиц и настройки страниц данных."
+        collapsible
+        defaultOpen={false}
       >
         <FieldRow
           label="Лимит запусков"

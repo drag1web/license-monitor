@@ -1,5 +1,4 @@
 import { ShieldCheck } from "lucide-react";
-import { fmtDate } from "../services/licenseService.js";
 import { ProductWorkspace } from "./ProductWorkspace.js";
 
 export function ProtectedWorkspace({

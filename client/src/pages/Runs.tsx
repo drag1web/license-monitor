@@ -6,6 +6,7 @@ import {
   cleanupOlderThan,
   deleteRunsBulk,
   download,
+  downloadProtectedFile,
   getRuns,
   runCheck,
   type RunRow,
@@ -16,7 +17,6 @@ import { cn } from "../ui/cn/cn";
 import { Dropdown } from "../components/Dropdown";
 import { ConfirmDialog } from "../ui/modal/ConfirmDialog";
 import { useConfirmDialog } from "../ui/modal/useConfirmDialog";
-import { ViewerNotice } from "../components/ViewerNotice";
 import { useAuth } from "../auth/AuthContext";
 import {
   Table,
@@ -651,10 +651,6 @@ export default function Runs() {
         onConfirm={confirm.confirm}
       />
 
-      {!isAdmin && (
-        <ViewerNotice message="У вас нет прав на удаление и очистку истории запусков. Доступен только просмотр истории." />
-      )}
-
       <Card className="p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex min-w-0 gap-4">
@@ -757,16 +753,16 @@ export default function Runs() {
               Копировать ID
             </Button>
 
-            <a
-              href={download.runsCsv}
-              target="_blank"
-              rel="noreferrer"
+            <button
+              type="button"
+              onClick={() =>
+                void downloadProtectedFile(download.runsCsv, "license-monitor-runs.csv")
+              }
               className="inline-flex h-8 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
             >
               <DownloadIcon className="h-4 w-4" />
               Экспорт CSV
-            </a>
-
+            </button>
             <span ref={menuAnchorRef} className="inline-flex">
               <Button
                 variant="ghost"
@@ -824,9 +820,11 @@ export default function Runs() {
                     icon={<DownloadIcon className="h-4 w-4" />}
                     title="Экспорт CSV"
                     description="Скачать историю запусков"
-                    href={download.runsCsv}
                     disabled={busy}
-                    onClick={() => setMenuOpen(false)}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      void downloadProtectedFile(download.runsCsv, "license-monitor-runs.csv");
+                    }}
                   />
 
                   <MenuItem
